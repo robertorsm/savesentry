@@ -1,6 +1,29 @@
 [package]
 name = "SaveGameWatcher"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+iced = "0.13"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+chrono = "0.4"
+anyhow = "1.0"
+notify = "6.1"
+rfd = "0.14"
+zip = "0.6"
+refinery = { version = "0.8", features = ["rusqlite"] }
+include_dir = "0.7"
+regex = "1.10"
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
+
+[build-dependencies]
+refinery = { version = "0.8", features = ["rusqlite"] }
+
+[profile.release]
+opt-level = "z"        # Otimizar para tamanho mínimo
+lto = true             # Link Time Optimization
+codegen-units = 1      # Melhor otimização cross-function
+strip = true           # Remover símbolos de debug
+panic = "abort"        # Reduzir código de unwinding

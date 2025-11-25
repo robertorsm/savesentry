@@ -24,3 +24,7 @@ Thumbs.db
 *.swo
 *~
 .#*
+
+# Banco de Dados
+*.db
+!resources/sgw.db
