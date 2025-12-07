@@ -20,9 +20,13 @@ regex = "1.10"
 refinery = { version = "0.8", features = ["rusqlite"] }
 
 [profile.release]
-opt-level = "s"        # Otimizar para tamanho (melhor que 'z' para performance)
-lto = true             # Link Time Optimization
+opt-level = "z"        # Otimizar para tamanho mínimo (reduz footprint)
+lto = "fat"            # Link Time Optimization máximo
 codegen-units = 1      # Melhor otimização cross-function
 strip = true           # Remover símbolos de debug
 panic = "abort"        # Reduzir código de unwinding
-incremental = false    # Desabilitar compilação incremental (reduz overhead)
+incremental = false    # Desabilitar compilação incremental
+overflow-checks = false # Desabilitar checks de overflow em release
+debug = false          # Sem informações de debug
+debug-assertions = false # Desabilitar assertions de debug
+rpath = false          # Não incluir rpath (não necessário para Windows)

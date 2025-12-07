@@ -161,7 +161,6 @@ O projeto utiliza **Immediate Mode UI** com arquitetura simples e direta:
 - **Component Pattern**: UI modular com componentes reutilizáveis
 - **Pure Functions**: Views sem side effects para testabilidade
 
-Para detalhes completos, consulte [`.copilot-memory.md`](.copilot-memory.md).
 
 ## 💻 Desenvolvimento
 
@@ -376,7 +375,7 @@ Desenvolvido com ❤️ em Rust
 
 ## 🙏 Agradecimentos
 
-- [iced](https://github.com/iced-rs/iced) - Framework GUI reativo
+- [egui](https://github.com/emilk/egui) - Immediate-mode GUI (eframe)
 - [notify](https://github.com/notify-rs/notify) - Cross-platform file watching
 - [rusqlite](https://github.com/rusqlite/rusqlite) - SQLite bindings
 - Comunidade Rust Brasil
@@ -393,4 +392,3 @@ Desenvolvido com ❤️ em Rust
 **Se este projeto foi útil, considere dar uma ⭐!**
 
 </div>
-

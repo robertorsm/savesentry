@@ -46,21 +46,24 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
         // Cria watcher do sistema de arquivos
         let mut watcher = match RecommendedWatcher::new(tx, Config::default()) {
             Ok(w) => w,
-            Err(e) => {
-                eprintln!("Erro ao criar watcher para perfil {}: {}", profile_id, e);
+            Err(_e) => {
+                #[cfg(debug_assertions)]
+                eprintln!("Erro ao criar watcher para perfil {}: {}", profile_id, _e);
                 return;
             }
         };
 
         // Monitora o diretório pai do arquivo de save
-        if let Err(e) = watcher.watch(&watch_dir, RecursiveMode::NonRecursive) {
+        if let Err(_e) = watcher.watch(&watch_dir, RecursiveMode::NonRecursive) {
+            #[cfg(debug_assertions)]
             eprintln!(
                 "Erro ao monitorar diretório {:?} para perfil {}: {}",
-                watch_dir, profile_id, e
+                watch_dir, profile_id, _e
             );
             return;
         }
 
+        #[cfg(debug_assertions)]
         println!(
             "Monitorando {:?} para perfil {} (ID: {})",
             save_path,
@@ -82,6 +85,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
 
                             // Tenta criar backup
                             if file_watcher.should_backup() {
+                                #[cfg(debug_assertions)]
                                 match file_watcher.create_backup() {
                                     Ok(backup_path) => {
                                         println!(
@@ -96,16 +100,21 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                                         );
                                     }
                                 }
+                                
+                                #[cfg(not(debug_assertions))]
+                                let _ = file_watcher.create_backup();
                             }
                         }
                     }
                 }
-                Err(e) => {
-                    eprintln!("Erro no watcher do perfil {}: {}", profile_id, e);
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("Erro no watcher do perfil {}: {}", profile_id, _e);
                 }
             }
         }
 
+        #[cfg(debug_assertions)]
         println!("Watcher encerrado para perfil {} (ID: {})", profile.name, profile_id);
     });
 

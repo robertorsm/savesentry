@@ -22,6 +22,7 @@ impl Database {
             .run(&mut conn)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
+        #[cfg(debug_assertions)]
         println!("Migrations aplicadas com sucesso!");
 
         Ok(Database { conn })
