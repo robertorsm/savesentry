@@ -1,4 +1,5 @@
-pub mod file_watcher;
-pub mod subscription;
+mod file_watcher;
+mod simple_watcher;
 
-pub use subscription::watch;
+pub use simple_watcher::{start_watching, WatcherHandle};
+

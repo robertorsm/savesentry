@@ -122,6 +122,7 @@ impl Database {
     }
 
     /// Busca um template por ID
+    #[allow(dead_code)]
     pub fn get_game_template(&self, id: i64) -> Result<crate::models::GameTemplate> {
         let mut stmt = self.conn.prepare(
             "SELECT id, name, save_directory, process_name, save_pattern, exclude_regex, version, is_official, created_at 

@@ -28,8 +28,9 @@ Monitore seus arquivos de save em tempo real e crie backups automáticos em form
 - 🎮 **Templates Pré-configurados**: Suporte para jogos populares com paths automáticos
 - 🎯 **Filtros de Exclusão**: Use regex para excluir arquivos temporários ou indesejados
 - 💾 **Modo Portátil**: Banco de dados local, sem dependências do sistema
-- 🖥️ **Interface Nativa**: UI responsiva e moderna com iced.rs
+- 🖥️ **Interface Nativa**: UI responsiva e moderna com egui
 - 🌙 **Tema Escuro**: Interface otimizada para longas sessões
+- ⚡ **Ultra Leve**: Apenas 5.3 MB, consumo mínimo de recursos
 
 ## 🚀 Instalação
 
@@ -109,19 +110,19 @@ Exemplo: `backup_24-11-2025_15-30-45.zip`
 
 ### Visão Geral
 
-O projeto segue a **Elm Architecture (TEA)** com separação clara de responsabilidades:
+O projeto utiliza **Immediate Mode UI** com arquitetura simples e direta:
 
 ```
 ┌─────────────────────────────────────────┐
-│  PRESENTATION (UI)                      │  ← iced.rs
-│  - Widgets reativos                     │
-│  - Message-driven updates               │
+│  PRESENTATION (UI)                      │  ← egui
+│  - Immediate mode rendering             │
+│  - Direct state mutation                │
 └──────────────┬──────────────────────────┘
                ↓
 ┌──────────────────────────────────────────┐
-│  APPLICATION (App)                       │  ← Orquestração
+│  APPLICATION (App)                       │  ← Estado e lógica
 │  - State management                      │
-│  - Message handlers                      │
+│  - UI + Logic em um só lugar            │
 └──────────────┬──────────────────────────┘
                ↓
 ┌──────────────────────────────────────────┐
@@ -141,11 +142,10 @@ O projeto segue a **Elm Architecture (TEA)** com separação clara de responsabi
 
 | Componente | Biblioteca | Versão | Propósito |
 |------------|-----------|--------|-----------|
-| UI Framework | iced | 0.13 | Interface gráfica reativa |
+| UI Framework | egui + eframe | 0.29 | Interface gráfica immediate mode |
 | Database | rusqlite | 0.32 | Persistência SQLite |
 | Migrations | refinery | 0.8 | Schema versioning |
 | File Monitoring | notify | 6.1 | File system watching |
-| Async Runtime | tokio | 1.0 | Operações assíncronas |
 | Compression | zip | 0.6 | Criação de backups |
 | Date/Time | chrono | 0.4 | Timestamps |
 | Pattern Matching | regex | 1.10 | Filtros de exclusão |
@@ -153,11 +153,11 @@ O projeto segue a **Elm Architecture (TEA)** com separação clara de responsabi
 ### Padrões de Projeto
 
 - **Repository Pattern**: Abstração do acesso a dados
-- **Command Pattern**: Sistema de mensagens tipadas
-- **Observer Pattern**: Subscription para file watching
+- **Immediate Mode UI**: Renderização e lógica unificadas
+- **Observer Pattern**: File watching com threads
 - **Factory Method**: Criação de perfis e templates
 - **Strategy Pattern**: Filtros configuráveis com regex
-- **State Machine**: Gerenciamento de estado reativo
+- **Thread-based Background**: Watchers em threads separadas
 - **Component Pattern**: UI modular com componentes reutilizáveis
 - **Pure Functions**: Views sem side effects para testabilidade
 
@@ -172,15 +172,8 @@ SaveGameWatcher/
 ├── src/
 │   ├── main.rs                 # Entry point
 │   ├── ui/                     # Presentation layer
-│   │   ├── mod.rs              # Módulo UI
-│   │   ├── app.rs              # Estado e lógica (95 linhas)
-│   │   ├── view.rs             # View principal (49 linhas)
-│   │   ├── messages.rs         # Message types
-│   │   └── views/              # Componentes UI
-│   │       ├── mod.rs          # Re-exports
-│   │       ├── template_selection.rs  # Seleção de templates
-│   │       ├── profile_form.rs        # Formulário de perfil
-│   │       └── profile_list.rs        # Lista de perfis
+│   │   ├── mod.rs              # Export
+│   │   └── app.rs              # Estado + lógica + UI (~350 linhas)
 │   ├── models/                 # Domain layer
 │   │   ├── game_profile.rs     # Perfil de jogo
 │   │   └── game_template.rs    # Template de jogo
@@ -189,20 +182,18 @@ SaveGameWatcher/
 │   │   └── migrations/         # SQL migrations
 │   └── watcher/                # Background processing
 │       ├── file_watcher.rs     # Lógica de backup
-│       └── subscription.rs     # Stream reativa
+│       └── simple_watcher.rs   # Thread-based watching
 ├── resources/
-│   └── sgw.db                  # Banco embarcado
+│   └── sgw.db                  # Banco seed
 ├── build.rs                    # Build script
-├── Cargo.toml                  # Dependências
-└── installer.iss               # Inno Setup script
+└── Cargo.toml                  # Dependências
 ```
 
-> **Nota sobre Arquitetura UI**: O módulo `ui/` foi refatorado seguindo princípios SOLID:
-> - `app.rs`: Core da aplicação (estado + lógica)
-> - `view.rs`: Orquestração de componentes
-> - `views/`: Componentes UI reutilizáveis e isolados
-> 
-> Cada componente é uma **pure function**, facilitando testes e manutenção.
+> **Nota sobre Arquitetura UI**: O projeto usa **egui** com paradigma Immediate Mode:
+> - `app.rs`: Toda lógica e UI unificada em um arquivo
+> - Código direto e simples, sem separação forçada
+> - UI renderizada e estado modificado simultaneamente
+> - Ideal para utilitários leves como este
 
 ### Comandos Úteis
 
@@ -235,14 +226,15 @@ O profile de release está otimizado para distribuição:
 
 ```toml
 [profile.release]
-opt-level = "z"        # Tamanho mínimo
+opt-level = "s"        # Balanço tamanho/performance
 lto = true             # Link Time Optimization
 codegen-units = 1      # Otimização cross-function
 strip = true           # Remove símbolos de debug
 panic = "abort"        # Reduz unwinding code
+incremental = false    # Remove overhead
 ```
 
-Resultado: Executável compacto (~10-20 MB) e altamente otimizado.
+Resultado: Executável compacto (**5.3 MB**) e altamente otimizado.
 
 ### Adicionar Novo Template
 
@@ -256,31 +248,19 @@ VALUES ('Meu Jogo', '%APPDATA%\MeuJogo\saves', 'jogo.exe', '*.sav', ...);
 
 ### Adicionar Nova Feature
 
-1. Adicione variant em `src/ui/messages.rs`:
+1. Adicione lógica em `src/ui/app.rs` no método `update()`:
 ```rust
-pub enum Message {
-    // ...existing variants...
-    MinhaNovaAcao(String),
-}
-```
-
-2. Implemente handler em `src/ui/app.rs`:
-```rust
-fn update(&mut self, message: Message) -> Task<Message> {
-    match message {
-        // ...existing matches...
-        Message::MinhaNovaAcao(valor) => {
-            // Lógica aqui
-        }
+// Dentro do método update() da trait eframe::App
+egui::CentralPanel::default().show(ctx, |ui| {
+    if ui.button("Nova Ação").clicked() {
+        // Implementar feature aqui
+        self.meu_campo = novo_valor;
     }
-    Task::none()
-}
+});
 ```
 
-3. Adicione trigger na UI em `view()`:
-```rust
-button("Ação").on_press(Message::MinhaNovaAcao(String::from("valor")))
-```
+2. Se necessário, adicione novo campo no `struct App`
+3. Teste e compile
 
 ## 🔧 Configuração Avançada
 

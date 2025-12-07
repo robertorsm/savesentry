@@ -41,22 +41,6 @@ if (Test-Path $exePath) {
     Write-Host "  1. Instale: winget install upx.upx" -ForegroundColor Gray
     Write-Host "  2. Comprima: upx --best --lzma $exePath" -ForegroundColor Gray
     Write-Host ""
-
-    # Verificar se Inno Setup está instalado (ISCC.exe)
-    if (Get-Command "ISCC.exe" -ErrorAction SilentlyContinue) {
-        Write-Host "Gerando instalador..." -ForegroundColor Cyan
-        ISCC.exe installer.iss
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Instalador gerado em target\installer\SaveGameWatcher_Setup.exe" -ForegroundColor Green
-        } else {
-            Write-Host "Erro ao gerar instalador." -ForegroundColor Red
-        }
-    } else {
-        Write-Host "DICA: Para gerar o instalador automaticamente:" -ForegroundColor Yellow
-        Write-Host "  1. Instale o Inno Setup: winget install JRSoftware.InnoSetup" -ForegroundColor Gray
-        Write-Host "  2. Adicione ao PATH se necessário" -ForegroundColor Gray
-        Write-Host "  3. Execute este script novamente" -ForegroundColor Gray
-    }
 }
 
 Write-Host "Pronto para distribuição!" -ForegroundColor Green

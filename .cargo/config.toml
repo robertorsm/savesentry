@@ -1,0 +1,15 @@
+# Configurações de compilação para otimizar performance e uso de memória
+
+
+[target.x86_64-pc-windows-msvc]
+# Otimizações específicas para Windows
+rustflags = [
+    "-C", "target-cpu=native",           # Otimizar para CPU específica
+    "-C", "link-arg=/STACK:2097152",     # Stack de 2MB (padrão é 1MB)
+]
+
+[profile.release]
+# Configurações adicionais de release
+debug = false                            # Sem informações de debug
+overflow-checks = false                  # Desabilitar checks de overflow em release
+
