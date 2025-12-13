@@ -9,20 +9,18 @@ use eframe::egui;
 
 /// Renderiza o gerenciador de templates (aba Templates)
 pub fn render_templates_manager(ui: &mut egui::Ui, state: &mut AppState) {
-    ui.horizontal(|ui| {
-        // Painel esquerdo - Lista de templates
-        egui::SidePanel::left("templates_list_panel")
-            .resizable(true)
-            .default_width(300.0)
-            .width_range(250.0..=400.0)
-            .show_inside(ui, |ui| {
-                render_templates_list(ui, state);
-            });
-
-        // Painel direito - Formulário
-        egui::CentralPanel::default().show_inside(ui, |ui| {
-            render_template_form(ui, state);
+    // Painel esquerdo - Lista de templates
+    egui::SidePanel::left("templates_list_panel")
+        .resizable(true)
+        .default_width(300.0)
+        .width_range(250.0..=400.0)
+        .show_inside(ui, |ui| {
+            render_templates_list(ui, state);
         });
+
+    // Painel direito - Formulário
+    egui::CentralPanel::default().show_inside(ui, |ui| {
+        render_template_form(ui, state);
     });
 }
 
