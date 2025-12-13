@@ -1,3 +1,5 @@
+//! Histórico de backups - Sidebar da aba Principal
+
 use crate::ui::state::AppState;
 use eframe::egui;
 

@@ -1,9 +1,13 @@
-mod backup_history;
-mod config_panel;
-mod messages;
-mod save_info;
+//! Componentes compartilhados entre páginas
+//!
+//! Apenas componentes globais:
+//! - tab_bar: Barra de navegação entre abas
+//! - messages: Exibição de mensagens de erro/sucesso
+//!
+//! Componentes específicos de cada página estão em pages/
 
-pub use backup_history::render_backup_history;
-pub use config_panel::render_config_panel;
+mod messages;
+mod tab_bar;
+
 pub use messages::render_messages;
-pub use save_info::render_save_info;
+pub use tab_bar::render_tab_bar;

@@ -1,6 +1,14 @@
 use crate::models::{GameProfile, GameTemplate};
 use crate::watcher;
 
+/// Abas da aplicação
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActiveTab {
+    Main,
+    Templates,
+    Settings,
+}
+
 /// Estado da aplicação (simplificado para single profile)
 pub struct AppState {
     // Banco de dados
@@ -31,6 +39,18 @@ pub struct AppState {
     // UI state
     pub error_message: Option<String>,
     pub success_message: Option<String>,
+
+    // Navegação por abas
+    pub active_tab: ActiveTab,
+
+    // Gerenciamento de templates
+    pub selected_template_for_edit: Option<i64>,
+    pub template_form_name: String,
+    pub template_form_save_dir: String,
+    pub template_form_process: String,
+    pub template_form_pattern: String,
+    pub template_form_exclude: String,
+    pub template_form_is_new: bool,
 }
 
 /// Entrada no histórico de backups
@@ -65,6 +85,14 @@ impl AppState {
             config_backup_dir: String::new(),
             error_message: None,
             success_message: None,
+            active_tab: ActiveTab::Main,
+            selected_template_for_edit: None,
+            template_form_name: String::new(),
+            template_form_save_dir: String::new(),
+            template_form_process: String::new(),
+            template_form_pattern: String::from("*.*"),
+            template_form_exclude: String::new(),
+            template_form_is_new: true,
         }
     }
 
@@ -132,5 +160,21 @@ impl AppState {
     pub fn clear_messages(&mut self) {
         self.error_message = None;
         self.success_message = None;
+    }
+
+    /// Limpa o formulário de template
+    pub fn clear_template_form(&mut self) {
+        self.selected_template_for_edit = None;
+        self.template_form_name.clear();
+        self.template_form_save_dir.clear();
+        self.template_form_process.clear();
+        self.template_form_pattern = String::from("*.*");
+        self.template_form_exclude.clear();
+        self.template_form_is_new = true;
+    }
+
+    /// Recarrega lista de templates do banco
+    pub fn reload_templates(&mut self) {
+        self.templates = self.db.list_game_templates().unwrap_or_default();
     }
 }

@@ -1,3 +1,12 @@
+//! Informações do savegame atual - Aba Principal
+//!
+//! Exibe:
+//! - Nome e caminho do arquivo
+//! - Data da última modificação
+//! - Status de monitoramento
+//! - Timeout configurado
+//! - Diretório de backups
+
 use crate::ui::state::AppState;
 use eframe::egui;
 

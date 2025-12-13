@@ -1,3 +1,5 @@
+//! Ações relacionadas a monitoramento e backup de saves
+
 use crate::models::GameProfile;
 use crate::ui::state::AppState;
 

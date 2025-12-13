@@ -148,4 +148,73 @@ impl Database {
             })
         })
     }
+
+    /// Insere um novo template de jogo
+    pub fn insert_game_template(
+        &self,
+        name: &str,
+        save_directory: &str,
+        process_name: &str,
+        save_pattern: &str,
+        exclude_regex: Option<&str>,
+    ) -> Result<i64> {
+        self.conn.execute(
+            "INSERT INTO game_templates (name, save_directory, process_name, save_pattern, exclude_regex, version, is_official, created_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5, 1, 0, datetime('now'))",
+            rusqlite::params![
+                name,
+                save_directory,
+                process_name,
+                save_pattern,
+                exclude_regex,
+            ],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Atualiza um template existente
+    pub fn update_game_template(
+        &self,
+        id: i64,
+        name: &str,
+        save_directory: &str,
+        process_name: &str,
+        save_pattern: &str,
+        exclude_regex: Option<&str>,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE game_templates 
+             SET name = ?1, save_directory = ?2, process_name = ?3, save_pattern = ?4, exclude_regex = ?5 
+             WHERE id = ?6",
+            rusqlite::params![
+                name,
+                save_directory,
+                process_name,
+                save_pattern,
+                exclude_regex,
+                id,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Deleta um template (apenas customizados, não oficiais)
+    pub fn delete_game_template(&self, id: i64) -> Result<()> {
+        // Verifica se não é oficial antes de deletar
+        let is_official: i32 = self.conn.query_row(
+            "SELECT is_official FROM game_templates WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )?;
+
+        if is_official != 0 {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
+        self.conn.execute(
+            "DELETE FROM game_templates WHERE id = ?1 AND is_official = 0",
+            [id],
+        )?;
+        Ok(())
+    }
 }

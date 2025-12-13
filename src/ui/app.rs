@@ -1,4 +1,5 @@
 use crate::ui::components;
+use crate::ui::pages;
 use crate::ui::state::AppState;
 use std::path::PathBuf;
 
@@ -29,7 +30,7 @@ impl eframe::App for App {
         // Atualiza informações do save periodicamente
         self.state.update_save_info();
 
-        // Top panel - Barra superior com título e configurações
+        // Top panel - Barra superior com título e status
         eframe::egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
@@ -51,44 +52,13 @@ impl eframe::App for App {
             ui.add_space(4.0);
         });
 
-        // Side panel - Lista de backups (histórico)
-        eframe::egui::SidePanel::left("backup_history_panel")
-            .resizable(true)
-            .default_width(250.0)
-            .width_range(200.0..=400.0)
-            .show(ctx, |ui| {
-                components::render_backup_history(ui, &mut self.state);
-            });
-
-        // Central panel - Área principal
-        eframe::egui::CentralPanel::default().show(ctx, |ui| {
-            // Mensagens de erro/sucesso
-            components::render_messages(ui, &mut self.state);
-
-            ui.add_space(8.0);
-
-            // Painel superior: Template selection + configurações
-            eframe::egui::Frame::group(ui.style())
-                .fill(ui.style().visuals.faint_bg_color)
-                .inner_margin(12.0)
-                .show(ui, |ui| {
-                    components::render_config_panel(ui, &mut self.state);
-                });
-
-            ui.add_space(12.0);
-
-            // Painel inferior: Informações do save atual
-            eframe::egui::Frame::group(ui.style())
-                .fill(if self.state.active_watcher.is_some() {
-                    eframe::egui::Color32::from_rgb(20, 60, 30)
-                } else {
-                    ui.style().visuals.faint_bg_color
-                })
-                .inner_margin(12.0)
-                .show(ui, |ui| {
-                    components::render_save_info(ui, &mut self.state);
-                });
+        // Barra de abas
+        eframe::egui::TopBottomPanel::top("tab_bar_panel").show(ctx, |ui| {
+            components::render_tab_bar(ui, &mut self.state);
         });
+
+        // Renderiza página ativa baseada na aba selecionada
+        pages::render_active_page(ctx, &mut self.state);
 
         // Otimização: Repaint adaptativo - reduz CPU quando inativo
         ctx.request_repaint_after(std::time::Duration::from_secs(1));

@@ -1,3 +1,11 @@
+//! Painel de configuração - Aba Principal
+//!
+//! Permite:
+//! - Seleção de template
+//! - Configuração de diretório de backup
+//! - Ajuste de timeout
+//! - Controles de monitoramento
+
 use crate::ui::state::AppState;
 use eframe::egui;
 
