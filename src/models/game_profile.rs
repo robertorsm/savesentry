@@ -16,6 +16,7 @@ pub struct GameProfile {
 
 impl GameProfile {
     /// Cria um novo perfil de jogo
+    #[allow(dead_code)]
     pub fn new(name: String, save_path: String, backup_dir: String, timeout_minutes: u32) -> Self {
         Self {
             id: 0,
@@ -31,6 +32,7 @@ impl GameProfile {
     }
 
     /// Cria um perfil baseado em um template
+    #[allow(dead_code)]
     pub fn from_template(
         template_id: i64,
         template: &crate::models::GameTemplate,

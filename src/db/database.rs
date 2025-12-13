@@ -34,6 +34,7 @@ impl Database {
     // ===== Métodos para GameProfile =====
 
     /// Insere um novo perfil de jogo
+    #[allow(dead_code)]
     pub fn insert_game_profile(&self, profile: &crate::models::GameProfile) -> Result<i64> {
         self.conn.execute(
             "INSERT INTO game_profiles (template_id, name, save_path, backup_dir, timeout_minutes, exclude_regex, is_active, created_at) 
@@ -53,6 +54,7 @@ impl Database {
     }
 
     /// Lista todos os perfis de jogos
+    #[allow(dead_code)]
     pub fn list_game_profiles(&self) -> Result<Vec<crate::models::GameProfile>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, template_id, name, save_path, backup_dir, timeout_minutes, exclude_regex, is_active, created_at 
@@ -79,6 +81,7 @@ impl Database {
     }
 
     /// Atualiza o status de monitoramento de um perfil
+    #[allow(dead_code)]
     pub fn update_profile_status(&self, id: i64, is_active: bool) -> Result<()> {
         self.conn.execute(
             "UPDATE game_profiles SET is_active = ?1 WHERE id = ?2",
@@ -88,6 +91,7 @@ impl Database {
     }
 
     /// Deleta um perfil de jogo
+    #[allow(dead_code)]
     pub fn delete_game_profile(&self, id: i64) -> Result<()> {
         self.conn
             .execute("DELETE FROM game_profiles WHERE id = ?1", [id])?;

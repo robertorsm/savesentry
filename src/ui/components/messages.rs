@@ -18,4 +18,3 @@ pub fn render_messages(ui: &mut egui::Ui, state: &mut AppState) {
         ui.add_space(5.0);
     }
 }
-

@@ -7,11 +7,13 @@ use std::thread;
 
 /// Handle para controlar um watcher em background
 pub struct WatcherHandle {
+    #[allow(dead_code)]
     profile_id: i64,
     _handle: thread::JoinHandle<()>,
 }
 
 impl WatcherHandle {
+    #[allow(dead_code)]
     pub fn profile_id(&self) -> i64 {
         self.profile_id
     }
@@ -66,9 +68,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
         #[cfg(debug_assertions)]
         println!(
             "Monitorando {:?} para perfil {} (ID: {})",
-            save_path,
-            profile.name,
-            profile_id
+            save_path, profile.name, profile_id
         );
 
         // Loop de processamento de eventos
@@ -100,7 +100,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                                         );
                                     }
                                 }
-                                
+
                                 #[cfg(not(debug_assertions))]
                                 let _ = file_watcher.create_backup();
                             }
@@ -115,7 +115,10 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
         }
 
         #[cfg(debug_assertions)]
-        println!("Watcher encerrado para perfil {} (ID: {})", profile.name, profile_id);
+        println!(
+            "Watcher encerrado para perfil {} (ID: {})",
+            profile.name, profile_id
+        );
     });
 
     Ok(WatcherHandle {
@@ -123,4 +126,3 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
         _handle: handle,
     })
 }
-

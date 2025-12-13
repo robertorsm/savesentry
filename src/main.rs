@@ -11,7 +11,7 @@ fn main() -> anyhow::Result<()> {
             .with_min_inner_size([600.0, 400.0])
             .with_title("SaveGameWatcher - Backup Automático de Save Games"),
         // Otimizações de performance
-        vsync: true,  // VSync para limitar FPS
+        vsync: true, // VSync para limitar FPS
         ..Default::default()
     };
 
@@ -25,4 +25,3 @@ fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
