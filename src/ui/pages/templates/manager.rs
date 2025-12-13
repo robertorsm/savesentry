@@ -42,76 +42,88 @@ fn render_templates_list(ui: &mut egui::Ui, state: &mut AppState) {
 
     ui.add_space(8.0);
 
-    // Clone templates para evitar borrow checker
-    let templates_snapshot = state.templates.clone();
+    // Otimização: captura apenas IDs para iteração, evita clone de Vec<GameTemplate>
+    let template_ids: Vec<i64> = state.templates.iter().map(|t| t.id).collect();
+    let mut clicked_edit: Option<i64> = None;
+    let mut clicked_delete: Option<i64> = None;
 
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
         .show(ui, |ui| {
-            for template in &templates_snapshot {
-                let is_selected = state.selected_template_for_edit == Some(template.id);
+            for &template_id in &template_ids {
+                if let Some(template) = state.templates.iter().find(|t| t.id == template_id) {
+                    let is_selected = state.selected_template_for_edit == Some(template.id);
 
-                egui::Frame::group(ui.style())
-                    .fill(if is_selected {
-                        egui::Color32::from_rgb(60, 80, 100)
-                    } else {
-                        ui.style().visuals.faint_bg_color
-                    })
-                    .inner_margin(10.0)
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
+                    egui::Frame::group(ui.style())
+                        .fill(if is_selected {
+                            egui::Color32::from_rgb(60, 80, 100)
+                        } else {
+                            ui.style().visuals.faint_bg_color
+                        })
+                        .inner_margin(10.0)
+                        .show(ui, |ui| {
+                            ui.set_min_width(ui.available_width());
 
-                        ui.horizontal(|ui| {
-                            // Nome do template
-                            ui.label(egui::RichText::new(&template.name).strong().size(14.0));
+                            ui.horizontal(|ui| {
+                                // Nome do template
+                                ui.label(egui::RichText::new(&template.name).strong().size(14.0));
 
-                            if template.is_official {
-                                ui.label(
-                                    egui::RichText::new("✓ Oficial")
-                                        .weak()
-                                        .size(11.0)
-                                        .color(egui::Color32::from_rgb(100, 200, 100)),
-                                );
-                            }
-                        });
-
-                        ui.add_space(4.0);
-
-                        ui.label(
-                            egui::RichText::new(&template.process_name)
-                                .weak()
-                                .size(11.0),
-                        );
-
-                        ui.add_space(8.0);
-
-                        ui.horizontal(|ui| {
-                            // Botão editar
-                            if ui
-                                .button("✏️ Editar")
-                                .on_hover_text("Editar este template")
-                                .clicked()
-                            {
-                                state.select_template_for_edit(template.id);
-                            }
+                                if template.is_official {
+                                    ui.label(
+                                        egui::RichText::new("✓ Oficial")
+                                            .weak()
+                                            .size(11.0)
+                                            .color(egui::Color32::from_rgb(100, 200, 100)),
+                                    );
+                                }
+                            });
 
                             ui.add_space(4.0);
 
-                            // Botão excluir (apenas para customizados)
-                            if !template.is_official
-                                && ui
-                                    .button("🗑️ Excluir")
-                                    .on_hover_text("Excluir este template")
-                                    .clicked()
-                            {
-                                state.delete_template(template.id);
-                            }
-                        });
-                    });
+                            ui.label(
+                                egui::RichText::new(&template.process_name)
+                                    .weak()
+                                    .size(11.0),
+                            );
 
-                ui.add_space(4.0);
+                            ui.add_space(8.0);
+
+                            ui.horizontal(|ui| {
+                                // Botão editar
+                                if ui
+                                    .button("✏️ Editar")
+                                    .on_hover_text("Editar este template")
+                                    .clicked()
+                                {
+                                    clicked_edit = Some(template.id);
+                                }
+
+                                ui.add_space(4.0);
+
+                                // Botão excluir (apenas para customizados)
+                                if !template.is_official
+                                    && ui
+                                        .button("🗑️ Excluir")
+                                        .on_hover_text("Excluir este template")
+                                        .clicked()
+                                {
+                                    clicked_delete = Some(template.id);
+                                }
+                            });
+                        });
+
+                    ui.add_space(4.0);
+                }
             }
         });
+
+    // Processar ações APÓS o loop
+    if let Some(template_id) = clicked_edit {
+        state.select_template_for_edit(template_id);
+    }
+    if let Some(template_id) = clicked_delete {
+        state.delete_template(template_id);
+    }
 }
 
 /// Renderiza o formulário de template

@@ -27,10 +27,12 @@ pub struct AppState {
 
     // Lista de backups criados (histórico)
     pub backup_history: Vec<BackupEntry>,
+    backup_history_last_reload: Option<std::time::Instant>,
 
     // Informações do save atual
     pub current_save_path: String,
     pub current_save_modified: Option<std::time::SystemTime>,
+    last_save_info_update: std::time::Instant,
 
     // Configuração
     pub config_timeout: u32,
@@ -79,8 +81,10 @@ impl AppState {
             active_profile: None,
             active_watcher: None,
             backup_history: Vec::new(),
+            backup_history_last_reload: None,
             current_save_path: String::new(),
             current_save_modified: None,
+            last_save_info_update: std::time::Instant::now(),
             config_timeout: 5,
             config_backup_dir: String::new(),
             error_message: None,
@@ -96,8 +100,15 @@ impl AppState {
         }
     }
 
-    /// Carrega histórico de backups do diretório
+    /// Carrega histórico de backups do diretório (cached - TTL de 5 segundos)
     pub fn reload_backup_history(&mut self) {
+        // Cache: recarrega apenas se passou mais de 5 segundos desde o último reload
+        if let Some(last_reload) = self.backup_history_last_reload {
+            if last_reload.elapsed() < std::time::Duration::from_secs(5) {
+                return; // Usa cache
+            }
+        }
+
         if self.config_backup_dir.is_empty() {
             return;
         }
@@ -141,10 +152,23 @@ impl AppState {
         backups.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
         self.backup_history = backups;
+        self.backup_history_last_reload = Some(std::time::Instant::now());
     }
 
-    /// Atualiza informações do save atual
+    /// Invalida o cache de backup history (forçar reload no próximo acesso)
+    pub fn invalidate_backup_cache(&mut self) {
+        self.backup_history_last_reload = None;
+    }
+
+    /// Atualiza informações do save atual (throttled - máximo a cada 2 segundos)
     pub fn update_save_info(&mut self) {
+        // Throttling: atualiza no máximo a cada 2 segundos para evitar I/O excessivo
+        let now = std::time::Instant::now();
+        if now.duration_since(self.last_save_info_update) < std::time::Duration::from_secs(2) {
+            return;
+        }
+        self.last_save_info_update = now;
+
         if self.current_save_path.is_empty() {
             return;
         }

@@ -22,28 +22,32 @@ pub fn render_config_panel(ui: &mut egui::Ui, state: &mut AppState) {
                 // Seleção de template
                 ui.label("Template do Jogo:");
 
-                // Clone templates para evitar borrow checker
-                let templates_snapshot: Vec<_> = state
-                    .templates
-                    .iter()
-                    .map(|t| (t.id, t.name.clone()))
-                    .collect();
+                // Otimização: captura ID selecionado para evitar conflito de borrow
                 let selected_name = state
                     .selected_template_id
-                    .and_then(|id| templates_snapshot.iter().find(|(tid, _)| *tid == id))
-                    .map(|(_, name)| name.as_str())
+                    .and_then(|id| state.templates.iter().find(|t| t.id == id))
+                    .map(|t| t.name.as_str())
                     .unwrap_or("Selecione um jogo...");
+
+                let mut clicked_template: Option<i64> = None;
 
                 egui::ComboBox::from_id_salt("template_selector")
                     .selected_text(selected_name)
                     .show_ui(ui, |ui| {
-                        for (template_id, template_name) in &templates_snapshot {
-                            let is_selected = state.selected_template_id == Some(*template_id);
-                            if ui.selectable_label(is_selected, template_name).clicked() {
-                                state.select_template(*template_id);
+                        // Itera diretamente sem clone (ComboBox só renderiza quando aberto)
+                        for template in &state.templates {
+                            let is_selected = state.selected_template_id == Some(template.id);
+                            if ui.selectable_label(is_selected, &template.name).clicked() {
+                                clicked_template = Some(template.id);
                             }
                         }
                     });
+
+                // Processa ação APÓS ComboBox para evitar borrow checker issues
+                if let Some(template_id) = clicked_template {
+                    state.select_template(template_id);
+                }
+
                 ui.end_row();
 
                 // Diretório de backup

@@ -60,7 +60,12 @@ impl eframe::App for App {
         // Renderiza página ativa baseada na aba selecionada
         pages::render_active_page(ctx, &mut self.state);
 
-        // Otimização: Repaint adaptativo - reduz CPU quando inativo
-        ctx.request_repaint_after(std::time::Duration::from_secs(1));
+        // Otimização: Repaint adaptativo baseado no estado
+        let repaint_interval = if self.state.active_watcher.is_some() {
+            std::time::Duration::from_secs(1) // Monitorando: 1 FPS para UI responsiva
+        } else {
+            std::time::Duration::from_secs(5) // Parado: 0.2 FPS para economizar CPU
+        };
+        ctx.request_repaint_after(repaint_interval);
     }
 }

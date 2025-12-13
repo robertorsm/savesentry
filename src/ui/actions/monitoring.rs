@@ -84,15 +84,15 @@ impl AppState {
         }
 
         // Pega o perfil ativo
-        if let Some(mut profile) = self.active_profile.clone() {
+        if let Some(profile) = &mut self.active_profile {
             profile.is_active = true;
 
-            // Inicia watcher
+            // Clone apenas uma vez para enviar para thread (necessário)
             match crate::watcher::start_watching(profile.clone()) {
                 Ok(handle) => {
                     self.active_watcher = Some(handle);
-                    self.active_profile = Some(profile);
                     self.success_message = Some("Monitoramento iniciado".to_string());
+                    self.invalidate_backup_cache(); // Invalida cache para forçar reload
                     self.reload_backup_history();
                 }
                 Err(e) => {

@@ -19,13 +19,13 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
             ui.add_space(32.0);
         });
     } else {
-        // Clone backup history para evitar borrow checker
-        let backups_snapshot = state.backup_history.clone();
+        // Otimização: zero-clone - iteração direta com tracking de clicks
+        let mut clicked_restore: Option<String> = None;
 
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                for backup in &backups_snapshot {
+                for backup in &state.backup_history {
                     // Card de backup
                     egui::Frame::group(ui.style())
                         .inner_margin(8.0)
@@ -65,13 +65,18 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                                 .on_hover_text("Restaurar este backup")
                                 .clicked()
                             {
-                                state.restore_backup(&backup.filename);
+                                clicked_restore = Some(backup.filename.clone());
                             }
                         });
 
                     ui.add_space(4.0);
                 }
             });
+
+        // Processar ação APÓS o loop para evitar borrow checker issues
+        if let Some(filename) = clicked_restore {
+            state.restore_backup(&filename);
+        }
     }
 
     ui.add_space(8.0);
