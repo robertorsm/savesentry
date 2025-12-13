@@ -144,8 +144,9 @@ fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                     // Diretório de save
                     ui.label("Diretório de Save:");
                     ui.horizontal(|ui| {
+                        let available_width = (ui.available_width() - 100.0).max(50.0);
                         ui.add_sized(
-                            [ui.available_width() - 100.0, 20.0],
+                            [available_width, 20.0],
                             egui::TextEdit::singleline(&mut state.template_form_save_dir)
                                 .hint_text("%APPDATA%\\Jogo\\saves"),
                         );

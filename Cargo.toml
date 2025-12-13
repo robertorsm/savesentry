@@ -4,20 +4,20 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow"] }
-egui = "0.29"
-rusqlite = { version = "0.32", features = ["bundled"] }
+eframe = { version = "0.30", default-features = false, features = ["default_fonts", "glow"] }
+egui = "0.33.3"
+rusqlite = { version = "0.37", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 anyhow = "1.0"
-notify = "6.1"
-rfd = "0.14"
-zip = { version = "0.6", default-features = false, features = ["deflate"] }
-refinery = { version = "0.8", features = ["rusqlite"] }
-regex = "1.10"
+notify = "8.2"
+rfd = "0.16"
+zip = { version = "6.0", default-features = false, features = ["deflate"] }
+refinery = { version = "0.9.0", features = ["rusqlite"] }
+regex = "1.12.2"
 
 [build-dependencies]
-refinery = { version = "0.8", features = ["rusqlite"] }
+refinery = { version = "0.9.0", features = ["rusqlite"] }
 
 [profile.release]
 opt-level = "z"        # Otimizar para tamanho mínimo (reduz footprint)

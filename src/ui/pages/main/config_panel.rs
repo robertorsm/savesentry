@@ -49,8 +49,9 @@ pub fn render_config_panel(ui: &mut egui::Ui, state: &mut AppState) {
                 // Diretório de backup
                 ui.label("Diretório de Backup:");
                 ui.horizontal(|ui| {
+                    let available_width = (ui.available_width() - 100.0).max(50.0);
                     ui.add_sized(
-                        [ui.available_width() - 100.0, 20.0],
+                        [available_width, 20.0],
                         egui::TextEdit::singleline(&mut state.config_backup_dir)
                             .hint_text("Onde salvar os backups"),
                     );

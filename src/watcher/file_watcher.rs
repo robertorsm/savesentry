@@ -2,7 +2,6 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
-use zip::write::FileOptions;
 
 /// Gerenciador de estado e lógica de backup para um perfil
 #[derive(Debug)]
@@ -82,7 +81,7 @@ impl FileWatcher {
         let mut zip = zip::ZipWriter::new(file);
 
         // Adiciona o arquivo de save ao ZIP
-        let options = FileOptions::default()
+        let options = zip::write::FileOptions::<()>::default()
             .compression_method(zip::CompressionMethod::Deflated)
             .unix_permissions(0o755);
 
