@@ -11,6 +11,7 @@ pub struct GameProfile {
     pub timeout_minutes: u32,     // Intervalo mínimo entre backups (em minutos)
     pub exclude_regex: Option<String>, // Regex de exclusão (pode sobrescrever template)
     pub is_active: bool,          // Se o monitoramento está ativo
+    pub process_name: Option<String>, // Nome do processo para monitoramento (ex: game.exe)
     pub created_at: String,       // Data de criação do perfil
 }
 
@@ -27,6 +28,7 @@ impl GameProfile {
             timeout_minutes,
             exclude_regex: None,
             is_active: false,
+            process_name: None,
             created_at: chrono::Local::now().to_rfc3339(),
         }
     }
@@ -48,6 +50,7 @@ impl GameProfile {
             timeout_minutes,
             exclude_regex: template.exclude_regex.clone(),
             is_active: false,
+            process_name: Some(template.process_name.clone()),
             created_at: chrono::Local::now().to_rfc3339(),
         }
     }

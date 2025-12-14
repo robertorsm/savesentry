@@ -106,7 +106,7 @@ pub fn render_config_panel(ui: &mut egui::Ui, state: &mut AppState) {
             if ui
                 .add_enabled(can_start, start_button)
                 .on_hover_text(if can_start {
-                    "Iniciar backup automático"
+                    "Salvar perfil e iniciar backup automático"
                 } else {
                     "Configure template e diretório primeiro"
                 })

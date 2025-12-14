@@ -14,11 +14,24 @@ impl AppState {
             let template_name = t.name.clone();
             let save_dir = t.expand_save_directory();
             let exclude_regex = t.exclude_regex.clone();
+            let process_name = Some(t.process_name.clone());
+
+            // 🔄 NOVO: Para watcher anterior se estiver ativo (troca de perfil)
+            if self.active_watcher.is_some() {
+                #[cfg(debug_assertions)]
+                println!("🔄 Parando watcher anterior para trocar de perfil...");
+
+                self.active_watcher = None; // Para watcher anterior
+
+                if let Some(ref mut old_profile) = self.active_profile {
+                    old_profile.is_active = false;
+                }
+            }
 
             self.selected_template_id = Some(template_id);
 
             // Cria perfil ativo baseado no template
-            let profile = GameProfile {
+            let mut profile = GameProfile {
                 id: 0, // ID temporário (não salvo no banco)
                 name: template_name.clone(),
                 save_path: save_dir.clone(),
@@ -27,14 +40,55 @@ impl AppState {
                 exclude_regex,
                 is_active: false,
                 template_id: Some(template_id),
+                process_name,
                 created_at: chrono::Local::now().to_rfc3339(),
             };
 
-            self.active_profile = Some(profile);
+            // 💾 Salva perfil no banco imediatamente se diretório de backup está configurado
+            if !self.config_backup_dir.is_empty() {
+                match self.db.insert_game_profile(&profile) {
+                    Ok(new_id) => {
+                        profile.id = new_id;
+
+                        // Salva como último perfil usado
+                        let _ = self.db.update_last_profile(
+                            profile.id,
+                            &profile.backup_dir,
+                            profile.timeout_minutes
+                        );
+
+                        #[cfg(debug_assertions)]
+                        println!("💾 Perfil salvo e registrado como último usado (ID: {})", new_id);
+                    }
+                    Err(_e) => {
+                        #[cfg(debug_assertions)]
+                        eprintln!("⚠️ Não foi possível salvar perfil: {}", _e);
+                        // Continua mesmo se falhar (perfil temporário)
+                    }
+                }
+            }
+
+            self.active_profile = Some(profile.clone());
             self.current_save_path = save_dir;
             self.update_save_info();
 
             self.success_message = Some(format!("Template '{}' selecionado", template_name));
+
+            // 🚀 Auto-start watcher se tem process_name (aguardando processo)
+            if profile.process_name.is_some() {
+                match crate::watcher::start_watching(profile) {
+                    Ok(handle) => {
+                        self.active_watcher = Some(handle);
+
+                        #[cfg(debug_assertions)]
+                        println!("🚀 Auto-started watcher for {} (awaiting process)", template_name);
+                    }
+                    Err(_e) => {
+                        #[cfg(debug_assertions)]
+                        eprintln!("❌ Failed to auto-start: {}", _e);
+                    }
+                }
+            }
         } else {
             self.error_message = Some("Template não encontrado".to_string());
         }
@@ -85,6 +139,29 @@ impl AppState {
 
         // Pega o perfil ativo
         if let Some(profile) = &mut self.active_profile {
+            // Salva perfil no banco se ainda não foi salvo (id == 0)
+            if profile.id == 0 {
+                match self.db.insert_game_profile(profile) {
+                    Ok(new_id) => {
+                        profile.id = new_id;
+
+                        #[cfg(debug_assertions)]
+                        println!("💾 Perfil salvo no banco com ID: {}", new_id);
+                    }
+                    Err(e) => {
+                        self.error_message = Some(format!("Erro ao salvar perfil: {}", e));
+                        return;
+                    }
+                }
+            }
+
+            // 🚀 Salva como último perfil usado
+            let _ = self.db.update_last_profile(
+                profile.id,
+                &profile.backup_dir,
+                profile.timeout_minutes
+            );
+
             profile.is_active = true;
 
             // Clone apenas uma vez para enviar para thread (necessário)

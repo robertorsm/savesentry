@@ -9,7 +9,7 @@ pub enum ActiveTab {
     Settings,
 }
 
-/// Estado da aplicação (simplificado para single profile)
+/// Estado da aplicação (single profile com auto-restore do último usado)
 pub struct AppState {
     // Banco de dados
     #[allow(dead_code)]
@@ -19,10 +19,10 @@ pub struct AppState {
     pub templates: Vec<GameTemplate>,
     pub selected_template_id: Option<i64>,
 
-    // Perfil ativo atual (apenas 1)
+    // Perfil ativo atual (último usado - auto-restored ao iniciar)
     pub active_profile: Option<GameProfile>,
 
-    // Watcher ativo
+    // Watcher ativo (apenas 1)
     pub active_watcher: Option<watcher::WatcherHandle>,
 
     // Lista de backups criados (histórico)
@@ -74,7 +74,7 @@ impl AppState {
         // Carrega templates existentes
         let templates = db.list_game_templates().unwrap_or_default();
 
-        Self {
+        let mut state = Self {
             db,
             templates,
             selected_template_id: None,
@@ -97,7 +97,12 @@ impl AppState {
             template_form_pattern: String::from("*.*"),
             template_form_exclude: String::new(),
             template_form_is_new: true,
-        }
+        };
+
+        // 🚀 Auto-restore último perfil usado
+        state.restore_last_profile();
+
+        state
     }
 
     /// Carrega histórico de backups do diretório (cached - TTL de 5 segundos)
@@ -200,5 +205,46 @@ impl AppState {
     /// Recarrega lista de templates do banco
     pub fn reload_templates(&mut self) {
         self.templates = self.db.list_game_templates().unwrap_or_default();
+    }
+
+    /// Restaura último perfil usado ao iniciar aplicação
+    fn restore_last_profile(&mut self) {
+        if let Ok((last_profile_id, last_backup_dir, last_timeout)) = self.db.get_app_state() {
+            // Restaura configurações
+            if let Some(dir) = last_backup_dir {
+                self.config_backup_dir = dir;
+            }
+            self.config_timeout = last_timeout;
+
+            // Restaura perfil
+            if let Some(profile_id) = last_profile_id {
+                if let Ok(profile) = self.db.get_game_profile(profile_id) {
+                    self.active_profile = Some(profile.clone());
+                    self.selected_template_id = profile.template_id;
+                    self.current_save_path = profile.save_path.clone();
+                    self.update_save_info();
+
+                    #[cfg(debug_assertions)]
+                    println!("📋 Restored last profile: {}", profile.name);
+
+                    // 🚀 Auto-start watcher se tem process_name
+                    if profile.process_name.is_some() {
+                        match crate::watcher::start_watching(profile) {
+                            Ok(handle) => {
+                                self.active_watcher = Some(handle);
+
+                                #[cfg(debug_assertions)]
+                                println!("✅ Auto-started watcher for process: {:?}",
+                                    self.active_profile.as_ref().unwrap().process_name);
+                            }
+                            Err(_e) => {
+                                #[cfg(debug_assertions)]
+                                eprintln!("❌ Failed to auto-start watcher: {}", _e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
