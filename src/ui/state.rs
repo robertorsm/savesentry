@@ -114,11 +114,20 @@ impl AppState {
             }
         }
 
-        if self.config_backup_dir.is_empty() {
-            return;
-        }
+        // Obtém backup_dir do perfil ativo (ou usa config_backup_dir se não houver perfil)
+        let backup_dir_str = if let Some(ref profile) = self.active_profile {
+            if profile.backup_dir.is_empty() {
+                return;
+            }
+            profile.backup_dir.clone()
+        } else {
+            if self.config_backup_dir.is_empty() {
+                return;
+            }
+            self.config_backup_dir.clone()
+        };
 
-        let backup_dir = std::path::Path::new(&self.config_backup_dir);
+        let backup_dir = std::path::Path::new(&backup_dir_str);
         if !backup_dir.exists() {
             return;
         }

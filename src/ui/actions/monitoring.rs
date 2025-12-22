@@ -30,12 +30,22 @@ impl AppState {
 
             self.selected_template_id = Some(template_id);
 
+            // Cria subdiretório específico para este jogo dentro do backup_dir global
+            let game_backup_dir = if self.config_backup_dir.is_empty() {
+                String::new()
+            } else {
+                std::path::Path::new(&self.config_backup_dir)
+                    .join(&template_name)
+                    .to_string_lossy()
+                    .to_string()
+            };
+
             // Cria perfil ativo baseado no template
             let mut profile = GameProfile {
                 id: 0, // ID temporário (não salvo no banco)
                 name: template_name.clone(),
                 save_path: save_dir.clone(),
-                backup_dir: self.config_backup_dir.clone(),
+                backup_dir: game_backup_dir,
                 timeout_minutes: self.config_timeout,
                 exclude_regex,
                 is_active: false,
@@ -100,7 +110,15 @@ impl AppState {
 
         // Atualiza perfil ativo se existir
         if let Some(ref mut profile) = self.active_profile {
-            profile.backup_dir = self.config_backup_dir.clone();
+            // Cria subdiretório específico para o jogo
+            if self.config_backup_dir.is_empty() {
+                profile.backup_dir = String::new();
+            } else {
+                profile.backup_dir = std::path::Path::new(&self.config_backup_dir)
+                    .join(&profile.name)
+                    .to_string_lossy()
+                    .to_string();
+            }
         }
 
         // Recarrega histórico de backups
@@ -194,12 +212,25 @@ impl AppState {
 
     /// Restaura um backup
     pub fn restore_backup(&mut self, filename: &str) {
-        if self.config_backup_dir.is_empty() || self.current_save_path.is_empty() {
+        if self.current_save_path.is_empty() {
             self.error_message = Some("Configuração incompleta".to_string());
             return;
         }
 
-        let backup_path = std::path::Path::new(&self.config_backup_dir).join(filename);
+        // Obtém backup_dir do perfil ativo
+        let backup_dir = if let Some(ref profile) = self.active_profile {
+            profile.backup_dir.clone()
+        } else {
+            self.error_message = Some("Nenhum perfil ativo".to_string());
+            return;
+        };
+
+        if backup_dir.is_empty() {
+            self.error_message = Some("Diretório de backup não configurado".to_string());
+            return;
+        }
+
+        let backup_path = std::path::Path::new(&backup_dir).join(filename);
 
         // Para o monitoramento temporariamente
         let was_monitoring = self.active_watcher.is_some();
