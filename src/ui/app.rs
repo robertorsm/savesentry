@@ -17,7 +17,7 @@ impl App {
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
             .unwrap_or_else(|| PathBuf::from("."));
 
-        let db_path = exe_dir.join("sgw.db");
+        let db_path = exe_dir.join("savesentry.db");
 
         Self {
             state: AppState::new(db_path),
@@ -42,7 +42,7 @@ impl eframe::App for App {
         eframe::egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
-                ui.heading("🎮 SaveGameWatcher");
+                ui.heading("🎮 SaveSentry");
                 ui.separator();
 
                 // Status do monitoramento

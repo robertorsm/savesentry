@@ -9,7 +9,7 @@ fn main() -> anyhow::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([900.0, 700.0])
             .with_min_inner_size([600.0, 400.0])
-            .with_title("SaveGameWatcher - Backup Automático de Save Games"),
+            .with_title("SaveSentry - Backup Automático de Save Games"),
         // Otimizações de performance
         vsync: true, // VSync para limitar FPS
         ..Default::default()
@@ -17,7 +17,7 @@ fn main() -> anyhow::Result<()> {
 
     // Executa a aplicação
     eframe::run_native(
-        "SaveGameWatcher",
+        "SaveSentry",
         options,
         Box::new(|cc| Ok(Box::new(ui::App::new(cc)))),
     )

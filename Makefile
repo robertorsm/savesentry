@@ -1,11 +1,11 @@
-# SaveGameWatcher - Makefile
+# SaveSentry - Makefile
 # Sistema de build e automação para Windows
 # Data: 2025-12-13
 
 .PHONY: help build-windows test-perf docs-update clean check fmt clippy run install dev all
 
 # Variáveis
-PROJECT_NAME = SaveGameWatcher
+PROJECT_NAME = SaveSentry
 RELEASE_PROFILE = release-windows
 CARGO = cargo
 PWSH = powershell.exe
@@ -20,7 +20,7 @@ CYAN = Write-Host -ForegroundColor Cyan
 # Help - Exibe todos os comandos disponíveis
 #==============================================================================
 help:
-	@$(PWSH) -Command "$(CYAN) '=== SaveGameWatcher - Comandos Disponíveis ==='"
+	@$(PWSH) -Command "$(CYAN) '=== SaveSentry - Comandos Disponíveis ==='"
 	@$(PWSH) -Command "$(YELLOW) ''"
 	@$(PWSH) -Command "$(YELLOW) 'Build e Release:'"
 	@$(PWSH) -Command "Write-Host '  make build-windows    - Build otimizado para Windows (release)'"

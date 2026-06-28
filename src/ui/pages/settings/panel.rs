@@ -89,7 +89,7 @@ pub fn render_settings_panel(ui: &mut egui::Ui, state: &mut AppState) {
                 ui.add_space(8.0);
 
                 ui.label(format!("Versão: {}", env!("CARGO_PKG_VERSION")));
-                ui.label("SaveGameWatcher - Monitor e Backup Automático de Saves");
+                ui.label("SaveSentry - Monitor e Backup Automático de Saves");
                 ui.label("Desenvolvido em Rust + egui");
             });
         });

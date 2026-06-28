@@ -1,4 +1,4 @@
-# SaveGameWatcher
+# SaveSentry
 
 <div align="center">
 
@@ -18,7 +18,7 @@ Monitore seus arquivos de save em tempo real e crie backups automáticos em form
 
 ## 📋 Sobre
 
-**SaveGameWatcher** é uma aplicação desktop nativa desenvolvida em Rust que monitora automaticamente seus arquivos de save games e cria backups compactados sempre que detecta modificações. Com uma interface moderna e intuitiva, permite gerenciar múltiplos perfis de backup com configurações individualizadas.
+**SaveSentry** é uma aplicação desktop nativa desenvolvida em Rust que monitora automaticamente seus arquivos de save games e cria backups compactados sempre que detecta modificações. Com uma interface moderna e intuitiva, permite gerenciar múltiplos perfis de backup com configurações individualizadas.
 
 ### ✨ Características
 
@@ -42,20 +42,20 @@ Monitore seus arquivos de save em tempo real e crie backups automáticos em form
 ### Download
 
 1. Baixe o instalador da [última release](../../releases/latest)
-2. Execute `SaveGameWatcher_Setup.exe`
+2. Execute `SaveSentry_Setup.exe`
 3. Siga as instruções do instalador
 
 ### Build do Código Fonte
 
 ```powershell
 # Clone o repositório
-git clone https://github.com/seu-usuario/SaveGameWatcher.git
-cd SaveGameWatcher
+git clone https://github.com/seu-usuario/SaveSentry.git
+cd SaveSentry
 
 # Compile em modo release
 cargo build --release
 
-# O executável estará em target/release/SaveGameWatcher.exe
+# O executável estará em target/release/SaveSentry.exe
 ```
 
 ## 📖 Uso
@@ -64,7 +64,7 @@ cargo build --release
 
 1. **Abra a aplicação**
    ```powershell
-   ./SaveGameWatcher.exe
+   ./SaveSentry.exe
    ```
 
 2. **Selecione um template (opcional)**
@@ -167,7 +167,7 @@ O projeto utiliza **Immediate Mode UI** com arquitetura simples e direta:
 ### Estrutura do Projeto
 
 ```
-SaveGameWatcher/
+SaveSentry/
 ├── src/
 │   ├── main.rs                 # Entry point
 │   ├── ui/                     # Presentation layer
@@ -334,7 +334,7 @@ cargo run
 
 ```powershell
 # Verificar permissões
-icacls SaveGameWatcher.exe
+icacls SaveSentry.exe
 ```
 
 ### Backup não está sendo criado

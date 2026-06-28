@@ -1,4 +1,4 @@
--- Initial schema for SaveGameWatcher
+-- Initial schema for SaveSentry
 -- Creates base tables for game profiles and templates
 -- Game templates (pre-configured game settings)
 CREATE TABLE IF NOT EXISTS game_templates (

@@ -1,11 +1,11 @@
 ; Script gerado para Inno Setup
 ; Documentação: http://www.jrsoftware.org/ishelp/
 
-#define MyAppName "SaveGameWatcher"
+#define MyAppName "SaveSentry"
 #define MyAppVersion "0.1.0"
-#define MyAppPublisher "SaveGameWatcher Team"
-#define MyAppURL "https://github.com/seu-usuario/SaveGameWatcher"
-#define MyAppExeName "SaveGameWatcher.exe"
+#define MyAppPublisher "SaveSentry Team"
+#define MyAppURL "https://github.com/seu-usuario/SaveSentry"
+#define MyAppExeName "SaveSentry.exe"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application.
@@ -24,7 +24,7 @@ DisableProgramGroupPage=yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
 OutputDir=target\installer
-OutputBaseFilename=SaveGameWatcher_Setup
+OutputBaseFilename=SaveSentry_Setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

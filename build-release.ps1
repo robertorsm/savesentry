@@ -1,7 +1,7 @@
-# Script de Build Otimizado - SaveGameWatcher
+# Script de Build Otimizado - SaveSentry
 # Gera executável release otimizado para tamanho mínimo
 
-Write-Host "=== SaveGameWatcher - Build Release Otimizado ===" -ForegroundColor Cyan
+Write-Host "=== SaveSentry - Build Release Otimizado ===" -ForegroundColor Cyan
 Write-Host ""
 
 # Limpar builds anteriores
@@ -24,7 +24,7 @@ Write-Host "=== Build concluído com sucesso! ===" -ForegroundColor Green
 Write-Host ""
 
 # Informações do executável
-$exePath = "target\release-windows\SaveGameWatcher.exe"
+$exePath = "target\release-windows\SaveSentry.exe"
 if (Test-Path $exePath) {
     $fileInfo = Get-Item $exePath
     $sizeInMB = [math]::Round($fileInfo.Length / 1MB, 2)

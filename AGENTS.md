@@ -1,4 +1,4 @@
-# SaveGameWatcher - Agent Context
+# SaveSentry - Agent Context
 
 **Stack**: Rust + egui + SQLite | **Platform**: Windows only | **Size**: ~75KB source
 
@@ -102,5 +102,5 @@ make build-windows   # release build + size check
 - **Process-aware monitoring**: If `process_name` exists, file watching only runs while process is detected.
 - **Backup cache**: 5s TTL on backup history listing.
 - **Save info throttle**: 2s max refresh rate.
-- **Portable**: DB at `<exe_dir>/sgw.db`. No registry.
+- **Portable**: DB at `<exe_dir>/savesentry.db`. No registry.
 - **Windows subsystem**: `build.rs` sets `/SUBSYSTEM:WINDOWS` for release.
