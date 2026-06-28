@@ -9,10 +9,26 @@ pub enum ActiveTab {
     Settings,
 }
 
+/// Configurações da aplicação
+pub struct AppConfig {
+    pub timeout_minutes: u32,
+    pub backup_dir: String,
+}
+
+/// Estado do formulário de template
+pub struct TemplateForm {
+    pub selected_for_edit: Option<i64>,
+    pub name: String,
+    pub save_dir: String,
+    pub process: String,
+    pub pattern: String,
+    pub exclude: String,
+    pub is_new: bool,
+}
+
 /// Estado da aplicação (single profile com auto-restore do último usado)
 pub struct AppState {
     // Banco de dados
-    #[allow(dead_code)]
     pub db: crate::db::Database,
 
     // Templates disponíveis
@@ -35,8 +51,7 @@ pub struct AppState {
     last_save_info_update: std::time::Instant,
 
     // Configuração
-    pub config_timeout: u32,
-    pub config_backup_dir: String,
+    pub config: AppConfig,
 
     // UI state
     pub error_message: Option<String>,
@@ -46,13 +61,10 @@ pub struct AppState {
     pub active_tab: ActiveTab,
 
     // Gerenciamento de templates
-    pub selected_template_for_edit: Option<i64>,
-    pub template_form_name: String,
-    pub template_form_save_dir: String,
-    pub template_form_process: String,
-    pub template_form_pattern: String,
-    pub template_form_exclude: String,
-    pub template_form_is_new: bool,
+    pub template_form: TemplateForm,
+
+    // Timer não-bloqueante para reinício de monitoramento após restore
+    pub restart_monitoring_after: Option<std::time::Instant>,
 }
 
 /// Entrada no histórico de backups
@@ -85,18 +97,23 @@ impl AppState {
             current_save_path: String::new(),
             current_save_modified: None,
             last_save_info_update: std::time::Instant::now(),
-            config_timeout: 5,
-            config_backup_dir: String::new(),
+            config: AppConfig {
+                timeout_minutes: 5,
+                backup_dir: String::new(),
+            },
             error_message: None,
             success_message: None,
             active_tab: ActiveTab::Main,
-            selected_template_for_edit: None,
-            template_form_name: String::new(),
-            template_form_save_dir: String::new(),
-            template_form_process: String::new(),
-            template_form_pattern: String::from("*.*"),
-            template_form_exclude: String::new(),
-            template_form_is_new: true,
+            template_form: TemplateForm {
+                selected_for_edit: None,
+                name: String::new(),
+                save_dir: String::new(),
+                process: String::new(),
+                pattern: String::from("*.*"),
+                exclude: String::new(),
+                is_new: true,
+            },
+            restart_monitoring_after: None,
         };
 
         // 🚀 Auto-restore último perfil usado
@@ -114,17 +131,17 @@ impl AppState {
             }
         }
 
-        // Obtém backup_dir do perfil ativo (ou usa config_backup_dir se não houver perfil)
+        // Obtém backup_dir do perfil ativo (ou usa config.backup_dir se não houver perfil)
         let backup_dir_str = if let Some(ref profile) = self.active_profile {
             if profile.backup_dir.is_empty() {
                 return;
             }
             profile.backup_dir.clone()
         } else {
-            if self.config_backup_dir.is_empty() {
+            if self.config.backup_dir.is_empty() {
                 return;
             }
-            self.config_backup_dir.clone()
+            self.config.backup_dir.clone()
         };
 
         let backup_dir = std::path::Path::new(&backup_dir_str);
@@ -134,26 +151,27 @@ impl AppState {
 
         let mut backups = Vec::new();
 
+        // Calcula save_name uma única vez (não muda durante o loop)
+        let save_name = self
+            .current_save_path
+            .split(&['/', '\\'][..])
+            .next_back()
+            .unwrap_or("save")
+            .to_string();
+
         if let Ok(entries) = std::fs::read_dir(backup_dir) {
             for entry in entries.flatten() {
                 if let Ok(metadata) = entry.metadata() {
                     if metadata.is_file() {
                         if let Some(filename) = entry.file_name().to_str() {
                             if filename.ends_with(".zip") {
-                                let save_name = self
-                                    .current_save_path
-                                    .split(&['/', '\\'][..])
-                                    .next_back()
-                                    .unwrap_or("save")
-                                    .to_string();
-
                                 backups.push(BackupEntry {
                                     filename: filename.to_string(),
                                     created_at: metadata
                                         .modified()
                                         .unwrap_or(std::time::SystemTime::now()),
                                     size_bytes: metadata.len(),
-                                    save_name,
+                                    save_name: save_name.clone(),
                                 });
                             }
                         }
@@ -202,13 +220,13 @@ impl AppState {
 
     /// Limpa o formulário de template
     pub fn clear_template_form(&mut self) {
-        self.selected_template_for_edit = None;
-        self.template_form_name.clear();
-        self.template_form_save_dir.clear();
-        self.template_form_process.clear();
-        self.template_form_pattern = String::from("*.*");
-        self.template_form_exclude.clear();
-        self.template_form_is_new = true;
+        self.template_form.selected_for_edit = None;
+        self.template_form.name.clear();
+        self.template_form.save_dir.clear();
+        self.template_form.process.clear();
+        self.template_form.pattern = String::from("*.*");
+        self.template_form.exclude.clear();
+        self.template_form.is_new = true;
     }
 
     /// Recarrega lista de templates do banco
@@ -221,9 +239,9 @@ impl AppState {
         if let Ok((last_profile_id, last_backup_dir, last_timeout)) = self.db.get_app_state() {
             // Restaura configurações
             if let Some(dir) = last_backup_dir {
-                self.config_backup_dir = dir;
+                self.config.backup_dir = dir;
             }
-            self.config_timeout = last_timeout;
+            self.config.timeout_minutes = last_timeout;
 
             // Restaura perfil
             if let Some(profile_id) = last_profile_id {

@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::Write;
+use std::io;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
@@ -80,10 +80,9 @@ impl FileWatcher {
         let file = fs::File::create(&backup_path)?;
         let mut zip = zip::ZipWriter::new(file);
 
-        // Adiciona o arquivo de save ao ZIP
+        // Adiciona o arquivo de save ao ZIP via streaming (evita OOM em arquivos grandes)
         let options = zip::write::FileOptions::<()>::default()
-            .compression_method(zip::CompressionMethod::Deflated)
-            .unix_permissions(0o755);
+            .compression_method(zip::CompressionMethod::Deflated);
 
         let save_filename = self
             .save_path
@@ -93,14 +92,52 @@ impl FileWatcher {
 
         zip.start_file(save_filename.as_ref(), options)?;
 
-        let save_content = fs::read(&self.save_path)?;
-        zip.write_all(&save_content)?;
+        let mut source = fs::File::open(&self.save_path)?;
+        io::copy(&mut source, &mut zip)?;
 
         zip.finish()?;
 
         // Atualiza timestamp do último backup
         self.last_backup = Some(SystemTime::now());
 
+        // Rotação: mantém no máximo 50 backups por perfil
+        self.rotate_backups()?;
+
         Ok(backup_path)
+    }
+
+    /// Remove backups antigos mantendo apenas os 50 mais recentes
+    fn rotate_backups(&self) -> Result<(), Box<dyn std::error::Error>> {
+        const MAX_BACKUPS: usize = 50;
+
+        let mut entries: Vec<_> = fs::read_dir(&self.backup_dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| ext.eq_ignore_ascii_case("zip"))
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        if entries.len() <= MAX_BACKUPS {
+            return Ok(());
+        }
+
+        // Ordena por data de modificação (mais antigo primeiro)
+        entries.sort_by(|a, b| {
+            let time_a = a.metadata().and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
+            let time_b = b.metadata().and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
+            time_a.cmp(&time_b)
+        });
+
+        // Remove os mais antigos
+        let to_remove = entries.len() - MAX_BACKUPS;
+        for entry in entries.iter().take(to_remove) {
+            let _ = fs::remove_file(entry.path());
+        }
+
+        Ok(())
     }
 }

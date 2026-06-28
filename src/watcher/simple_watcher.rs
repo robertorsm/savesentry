@@ -3,7 +3,8 @@ use crate::watcher::file_watcher::FileWatcher;
 use crate::watcher::process_monitor::{ProcessMonitor, ProcessState};
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::PathBuf;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
 use std::thread;
 
 /// Handle para controlar um watcher em background
@@ -40,7 +41,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
 
     // Flag compartilhada: indica se deve monitorar arquivo
     // Se process_name existe, começar desabilitado até processo ser detectado
-    let should_monitor = Arc::new(Mutex::new(process_name.is_none()));
+    let should_monitor = Arc::new(AtomicBool::new(process_name.is_none()));
     let should_monitor_clone = Arc::clone(&should_monitor);
 
     // Thread de file watching
@@ -85,10 +86,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
         // Loop de processamento de eventos
         while let Ok(result) = rx.recv() {
             // Verifica flag: só processa se deve monitorar
-            let should_process = match should_monitor_clone.lock() {
-                Ok(flag) => *flag,
-                Err(_) => continue, // Mutex poisoned, skip
-            };
+            let should_process = should_monitor_clone.load(Ordering::Relaxed);
 
             if !should_process {
                 continue; // Pula processamento enquanto aguarda processo
@@ -168,17 +166,13 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                             proc_name
                         );
 
-                        if let Ok(mut flag) = should_monitor_clone.lock() {
-                            *flag = true;
-                        }
+                        should_monitor_clone.store(true, Ordering::Relaxed);
                     }
                     ProcessState::Stopped => {
                         #[cfg(debug_assertions)]
                         println!("⛔ Processo {} fechado. Pausando monitoramento", proc_name);
 
-                        if let Ok(mut flag) = should_monitor_clone.lock() {
-                            *flag = false;
-                        }
+                        should_monitor_clone.store(false, Ordering::Relaxed);
                     }
                     ProcessState::Waiting => {
                         // Continue esperando

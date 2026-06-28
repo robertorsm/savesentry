@@ -1,8 +1,8 @@
-/// Monitoramento otimizado de processos usando sysinfo
-/// Implementa estratégia híbrida: polling rápido (1s) aguardando jogo,
-/// polling lento (10s) quando jogo está rodando
+//! Monitoramento otimizado de processos usando sysinfo
+//! Implementa estratégia híbrida: polling rápido (1s) aguardando jogo,
+//! polling lento (10s) quando jogo está rodando
 
-use sysinfo::{System, Pid};
+use sysinfo::{ProcessRefreshKind, System, Pid};
 use std::time::Duration;
 
 /// Estado do monitoramento de processo
@@ -44,7 +44,10 @@ impl ProcessMonitor {
         match self.state {
             ProcessState::Waiting => {
                 // Fase 1: Busca rápida por novo processo (polling 1s)
-                self.system.refresh_processes();
+                // Usa refresh mínimo: apenas lista de processos, sem dados extras
+                self.system.refresh_processes_specifics(
+                    ProcessRefreshKind::new(),
+                );
 
                 // Early exit: para assim que encontrar processo
                 if let Some((pid, _)) = self.system
@@ -95,14 +98,8 @@ impl ProcessMonitor {
         }
     }
 
-    /// Retorna o PID atualmente cacheado (se houver)
-    #[allow(dead_code)]
-    pub fn cached_pid(&self) -> Option<Pid> {
-        self.cached_pid
-    }
-
-    /// Retorna estado atual
-    #[allow(dead_code)]
+    /// Retorna estado atual (usado em testes)
+    #[cfg(test)]
     pub fn current_state(&self) -> ProcessState {
         self.state
     }

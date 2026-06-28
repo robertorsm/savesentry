@@ -34,7 +34,6 @@ impl Database {
     // ===== Métodos para GameProfile =====
 
     /// Insere um novo perfil de jogo
-    #[allow(dead_code)]
     pub fn insert_game_profile(&self, profile: &crate::models::GameProfile) -> Result<i64> {
         self.conn.execute(
             "INSERT INTO game_profiles (template_id, name, save_path, backup_dir, timeout_minutes, exclude_regex, is_active, process_name, created_at) 
@@ -52,52 +51,6 @@ impl Database {
             ],
         )?;
         Ok(self.conn.last_insert_rowid())
-    }
-
-    /// Lista todos os perfis de jogos
-    #[allow(dead_code)]
-    pub fn list_game_profiles(&self) -> Result<Vec<crate::models::GameProfile>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, template_id, name, save_path, backup_dir, timeout_minutes, exclude_regex, is_active, process_name, created_at 
-             FROM game_profiles ORDER BY created_at DESC",
-        )?;
-
-        let profiles = stmt
-            .query_map([], |row| {
-                Ok(crate::models::GameProfile {
-                    id: row.get(0)?,
-                    template_id: row.get(1)?,
-                    name: row.get(2)?,
-                    save_path: row.get(3)?,
-                    backup_dir: row.get(4)?,
-                    timeout_minutes: row.get(5)?,
-                    exclude_regex: row.get(6)?,
-                    is_active: row.get::<_, i32>(7)? != 0,
-                    process_name: row.get(8).ok(),
-                    created_at: row.get(9)?,
-                })
-            })?
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(profiles)
-    }
-
-    /// Atualiza o status de monitoramento de um perfil
-    #[allow(dead_code)]
-    pub fn update_profile_status(&self, id: i64, is_active: bool) -> Result<()> {
-        self.conn.execute(
-            "UPDATE game_profiles SET is_active = ?1 WHERE id = ?2",
-            rusqlite::params![is_active as i32, id],
-        )?;
-        Ok(())
-    }
-
-    /// Deleta um perfil de jogo
-    #[allow(dead_code)]
-    pub fn delete_game_profile(&self, id: i64) -> Result<()> {
-        self.conn
-            .execute("DELETE FROM game_profiles WHERE id = ?1", [id])?;
-        Ok(())
     }
 
     // ===== Métodos para GameTemplate =====
@@ -126,29 +79,6 @@ impl Database {
             .collect::<Result<Vec<_>>>()?;
 
         Ok(templates)
-    }
-
-    /// Busca um template por ID
-    #[allow(dead_code)]
-    pub fn get_game_template(&self, id: i64) -> Result<crate::models::GameTemplate> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, name, save_directory, process_name, save_pattern, exclude_regex, version, is_official, created_at 
-             FROM game_templates WHERE id = ?1",
-        )?;
-
-        stmt.query_row([id], |row| {
-            Ok(crate::models::GameTemplate {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                save_directory: row.get(2)?,
-                process_name: row.get(3)?,
-                save_pattern: row.get(4)?,
-                exclude_regex: row.get(5)?,
-                version: row.get(6)?,
-                is_official: row.get::<_, i32>(7)? != 0,
-                created_at: row.get(8)?,
-            })
-        })
     }
 
     /// Insere um novo template de jogo
@@ -210,7 +140,9 @@ impl Database {
         )?;
 
         if is_official != 0 {
-            return Err(rusqlite::Error::InvalidQuery);
+            return Err(rusqlite::Error::ToSqlConversionFailure(
+                "Templates oficiais não podem ser excluídos".into(),
+            ));
         }
 
         self.conn.execute(

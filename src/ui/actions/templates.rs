@@ -6,50 +6,50 @@ impl AppState {
     /// Seleciona um template para edição
     pub fn select_template_for_edit(&mut self, template_id: i64) {
         if let Some(template) = self.templates.iter().find(|t| t.id == template_id) {
-            self.selected_template_for_edit = Some(template_id);
-            self.template_form_name = template.name.clone();
-            self.template_form_save_dir = template.save_directory.clone();
-            self.template_form_process = template.process_name.clone();
-            self.template_form_pattern = template.save_pattern.clone();
-            self.template_form_exclude = template.exclude_regex.clone().unwrap_or_default();
-            self.template_form_is_new = false;
+            self.template_form.selected_for_edit = Some(template_id);
+            self.template_form.name = template.name.clone();
+            self.template_form.save_dir = template.save_directory.clone();
+            self.template_form.process = template.process_name.clone();
+            self.template_form.pattern = template.save_pattern.clone();
+            self.template_form.exclude = template.exclude_regex.clone().unwrap_or_default();
+            self.template_form.is_new = false;
         }
     }
 
     /// Cria um novo template
     pub fn create_template(&mut self) {
         // Validação
-        if self.template_form_name.trim().is_empty() {
+        if self.template_form.name.trim().is_empty() {
             self.error_message = Some("Nome do template é obrigatório".to_string());
             return;
         }
-        if self.template_form_save_dir.trim().is_empty() {
+        if self.template_form.save_dir.trim().is_empty() {
             self.error_message = Some("Diretório de save é obrigatório".to_string());
             return;
         }
-        if self.template_form_process.trim().is_empty() {
+        if self.template_form.process.trim().is_empty() {
             self.error_message = Some("Nome do processo é obrigatório".to_string());
             return;
         }
 
-        let exclude_regex = if self.template_form_exclude.is_empty() {
+        let exclude_regex = if self.template_form.exclude.is_empty() {
             None
         } else {
-            Some(self.template_form_exclude.clone())
+            Some(self.template_form.exclude.clone())
         };
 
         // Insere no banco
         match self.db.insert_game_template(
-            &self.template_form_name,
-            &self.template_form_save_dir,
-            &self.template_form_process,
-            &self.template_form_pattern,
+            &self.template_form.name,
+            &self.template_form.save_dir,
+            &self.template_form.process,
+            &self.template_form.pattern,
             exclude_regex.as_deref(),
         ) {
             Ok(_) => {
                 self.success_message = Some(format!(
                     "Template '{}' criado com sucesso",
-                    self.template_form_name
+                    self.template_form.name
                 ));
                 self.reload_templates();
                 self.clear_template_form();
@@ -62,31 +62,31 @@ impl AppState {
 
     /// Atualiza um template existente
     pub fn update_template(&mut self) {
-        if let Some(template_id) = self.selected_template_for_edit {
+        if let Some(template_id) = self.template_form.selected_for_edit {
             // Validação
-            if self.template_form_name.trim().is_empty() {
+            if self.template_form.name.trim().is_empty() {
                 self.error_message = Some("Nome do template é obrigatório".to_string());
                 return;
             }
 
-            let exclude_regex = if self.template_form_exclude.is_empty() {
+            let exclude_regex = if self.template_form.exclude.is_empty() {
                 None
             } else {
-                Some(self.template_form_exclude.clone())
+                Some(self.template_form.exclude.clone())
             };
 
             // Atualiza no banco
             match self.db.update_game_template(
                 template_id,
-                &self.template_form_name,
-                &self.template_form_save_dir,
-                &self.template_form_process,
-                &self.template_form_pattern,
+                &self.template_form.name,
+                &self.template_form.save_dir,
+                &self.template_form.process,
+                &self.template_form.pattern,
                 exclude_regex.as_deref(),
             ) {
                 Ok(_) => {
                     self.success_message =
-                        Some(format!("Template '{}' atualizado", self.template_form_name));
+                        Some(format!("Template '{}' atualizado", self.template_form.name));
                     self.reload_templates();
                     self.clear_template_form();
                 }
@@ -110,7 +110,7 @@ impl AppState {
                 Ok(_) => {
                     self.success_message = Some("Template excluído com sucesso".to_string());
                     self.reload_templates();
-                    if self.selected_template_for_edit == Some(template_id) {
+                    if self.template_form.selected_for_edit == Some(template_id) {
                         self.clear_template_form();
                     }
                 }

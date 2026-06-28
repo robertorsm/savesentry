@@ -52,7 +52,7 @@ fn render_templates_list(ui: &mut egui::Ui, state: &mut AppState) {
         .show(ui, |ui| {
             for &template_id in &template_ids {
                 if let Some(template) = state.templates.iter().find(|t| t.id == template_id) {
-                    let is_selected = state.selected_template_for_edit == Some(template.id);
+                    let is_selected = state.template_form.selected_for_edit == Some(template.id);
 
                     egui::Frame::group(ui.style())
                         .fill(if is_selected {
@@ -130,7 +130,7 @@ fn render_templates_list(ui: &mut egui::Ui, state: &mut AppState) {
 fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
     ui.add_space(8.0);
 
-    if state.template_form_is_new {
+    if state.template_form.is_new {
         ui.heading("Criar Novo Template");
     } else {
         ui.heading("Editar Template");
@@ -148,7 +148,7 @@ fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                 .show(ui, |ui| {
                     // Nome
                     ui.label("Nome do Jogo:");
-                    ui.text_edit_singleline(&mut state.template_form_name);
+                    ui.text_edit_singleline(&mut state.template_form.name);
                     ui.end_row();
 
                     // Diretório de save
@@ -157,7 +157,7 @@ fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                         let available_width = (ui.available_width() - 100.0).max(50.0);
                         ui.add_sized(
                             [available_width, 20.0],
-                            egui::TextEdit::singleline(&mut state.template_form_save_dir)
+                            egui::TextEdit::singleline(&mut state.template_form.save_dir)
                                 .hint_text("%APPDATA%\\Jogo\\saves"),
                         );
                         if ui.button("📁").clicked() {
@@ -165,7 +165,7 @@ fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                                 .set_title("Selecionar diretório de saves")
                                 .pick_folder()
                             {
-                                state.template_form_save_dir = path.display().to_string();
+                                state.template_form.save_dir = path.display().to_string();
                             }
                         }
                     });
@@ -173,17 +173,17 @@ fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
 
                     // Nome do processo
                     ui.label("Nome do Processo:");
-                    ui.text_edit_singleline(&mut state.template_form_process);
+                    ui.text_edit_singleline(&mut state.template_form.process);
                     ui.end_row();
 
                     // Padrão de arquivos
                     ui.label("Padrão de Arquivos:");
-                    ui.text_edit_singleline(&mut state.template_form_pattern);
+                    ui.text_edit_singleline(&mut state.template_form.pattern);
                     ui.end_row();
 
                     // Regex de exclusão
                     ui.label("Regex de Exclusão:");
-                    ui.text_edit_singleline(&mut state.template_form_exclude);
+                    ui.text_edit_singleline(&mut state.template_form.exclude);
                     ui.end_row();
                 });
 
@@ -191,10 +191,10 @@ fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
 
             // Botões de ação
             ui.horizontal(|ui| {
-                if state.template_form_is_new {
-                    let can_create = !state.template_form_name.trim().is_empty()
-                        && !state.template_form_save_dir.trim().is_empty()
-                        && !state.template_form_process.trim().is_empty();
+                if state.template_form.is_new {
+                    let can_create = !state.template_form.name.trim().is_empty()
+                        && !state.template_form.save_dir.trim().is_empty()
+                        && !state.template_form.process.trim().is_empty();
 
                     if ui
                         .add_enabled(

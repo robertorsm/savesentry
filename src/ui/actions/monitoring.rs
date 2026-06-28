@@ -31,10 +31,10 @@ impl AppState {
             self.selected_template_id = Some(template_id);
 
             // Cria subdiretório específico para este jogo dentro do backup_dir global
-            let game_backup_dir = if self.config_backup_dir.is_empty() {
+            let game_backup_dir = if self.config.backup_dir.is_empty() {
                 String::new()
             } else {
-                std::path::Path::new(&self.config_backup_dir)
+                std::path::Path::new(&self.config.backup_dir)
                     .join(&template_name)
                     .to_string_lossy()
                     .to_string()
@@ -46,7 +46,7 @@ impl AppState {
                 name: template_name.clone(),
                 save_path: save_dir.clone(),
                 backup_dir: game_backup_dir,
-                timeout_minutes: self.config_timeout,
+                timeout_minutes: self.config.timeout_minutes,
                 exclude_regex,
                 is_active: false,
                 template_id: Some(template_id),
@@ -55,7 +55,7 @@ impl AppState {
             };
 
             // 💾 Salva perfil no banco imediatamente se diretório de backup está configurado
-            if !self.config_backup_dir.is_empty() {
+            if !self.config.backup_dir.is_empty() {
                 match self.db.insert_game_profile(&profile) {
                     Ok(new_id) => {
                         profile.id = new_id;
@@ -106,15 +106,15 @@ impl AppState {
 
     /// Configura diretório de backup
     pub fn set_backup_directory(&mut self, dir: String) {
-        self.config_backup_dir = dir;
+        self.config.backup_dir = dir;
 
         // Atualiza perfil ativo se existir
         if let Some(ref mut profile) = self.active_profile {
             // Cria subdiretório específico para o jogo
-            if self.config_backup_dir.is_empty() {
+            if self.config.backup_dir.is_empty() {
                 profile.backup_dir = String::new();
             } else {
-                profile.backup_dir = std::path::Path::new(&self.config_backup_dir)
+                profile.backup_dir = std::path::Path::new(&self.config.backup_dir)
                     .join(&profile.name)
                     .to_string_lossy()
                     .to_string();
@@ -127,7 +127,7 @@ impl AppState {
 
     /// Configura timeout de backup
     pub fn set_timeout(&mut self, minutes: u32) {
-        self.config_timeout = minutes;
+        self.config.timeout_minutes = minutes;
 
         // Atualiza perfil ativo se existir
         if let Some(ref mut profile) = self.active_profile {
@@ -144,7 +144,7 @@ impl AppState {
         }
 
         // Valida se tem diretório de backup
-        if self.config_backup_dir.is_empty() {
+        if self.config.backup_dir.is_empty() {
             self.error_message = Some("Configure o diretório de backup".to_string());
             return;
         }
@@ -246,9 +246,10 @@ impl AppState {
 
                 // Reinicia monitoramento se estava ativo
                 if was_monitoring {
-                    // Aguarda 2 segundos antes de reiniciar (evita backup imediato)
-                    std::thread::sleep(std::time::Duration::from_secs(2));
-                    self.start_monitoring();
+                    // Agenda reinício após 2 segundos via timer não-bloqueante
+                    self.restart_monitoring_after = Some(
+                        std::time::Instant::now() + std::time::Duration::from_secs(2)
+                    );
                 }
             }
             Err(e) => {

@@ -30,6 +30,14 @@ impl eframe::App for App {
         // Atualiza informações do save periodicamente
         self.state.update_save_info();
 
+        // Verifica timer não-bloqueante para reinício de monitoramento após restore
+        if let Some(instant) = self.state.restart_monitoring_after {
+            if instant <= std::time::Instant::now() {
+                self.state.restart_monitoring_after = None;
+                self.state.start_monitoring();
+            }
+        }
+
         // Top panel - Barra superior com título e status
         eframe::egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.add_space(4.0);

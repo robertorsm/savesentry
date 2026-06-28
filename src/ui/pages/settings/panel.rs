@@ -37,7 +37,7 @@ pub fn render_settings_panel(ui: &mut egui::Ui, state: &mut AppState) {
                             let available_width = (ui.available_width() - 100.0).max(50.0);
                             ui.add_sized(
                                 [available_width, 20.0],
-                                egui::TextEdit::singleline(&mut state.config_backup_dir)
+                                egui::TextEdit::singleline(&mut state.config.backup_dir)
                                     .hint_text("Onde salvar os backups"),
                             );
                             if ui.button("📁 Buscar").clicked() {
@@ -56,13 +56,13 @@ pub fn render_settings_panel(ui: &mut egui::Ui, state: &mut AppState) {
                         ui.horizontal(|ui| {
                             if ui
                                 .add(
-                                    egui::DragValue::new(&mut state.config_timeout)
+                                    egui::DragValue::new(&mut state.config.timeout_minutes)
                                         .speed(0.5)
                                         .range(1..=1440),
                                 )
                                 .changed()
                             {
-                                state.set_timeout(state.config_timeout);
+                                state.set_timeout(state.config.timeout_minutes);
                             }
                             ui.label("minutos");
                         });

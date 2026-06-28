@@ -142,13 +142,13 @@ O projeto utiliza **Immediate Mode UI** com arquitetura simples e direta:
 
 | Componente | Biblioteca | Versão | Propósito |
 |------------|-----------|--------|-----------|
-| UI Framework | egui + eframe | 0.29 | Interface gráfica immediate mode |
-| Database | rusqlite | 0.32 | Persistência SQLite |
-| Migrations | refinery | 0.8 | Schema versioning |
-| File Monitoring | notify | 6.1 | File system watching |
-| Compression | zip | 0.6 | Criação de backups |
+| UI Framework | egui + eframe | 0.33 | Interface gráfica immediate mode |
+| Database | rusqlite | 0.37 | Persistência SQLite |
+| Migrations | refinery | 0.9 | Schema versioning |
+| File Monitoring | notify | 8.2 | File system watching |
+| Compression | zip | 6.0 | Criação de backups |
 | Date/Time | chrono | 0.4 | Timestamps |
-| Pattern Matching | regex | 1.10 | Filtros de exclusão |
+| Pattern Matching | regex | 1.12 | Filtros de exclusão |
 
 ### Padrões de Projeto
 
@@ -171,8 +171,18 @@ SaveGameWatcher/
 ├── src/
 │   ├── main.rs                 # Entry point
 │   ├── ui/                     # Presentation layer
-│   │   ├── mod.rs              # Export
-│   │   └── app.rs              # Estado + lógica + UI (~350 linhas)
+│   │   ├── app.rs              # Orquestração (~70 linhas)
+│   │   ├── state.rs            # Estado centralizado
+│   │   ├── actions/            # Business logic
+│   │   │   ├── monitoring.rs   # Monitoramento e backup
+│   │   │   └── templates.rs    # CRUD de templates
+│   │   ├── components/         # Componentes compartilhados
+│   │   │   ├── tab_bar.rs      # Barra de navegação
+│   │   │   └── messages.rs     # Mensagens de notificação
+│   │   └── pages/              # Páginas das 3 abas
+│   │       ├── main/           # Aba Principal
+│   │       ├── templates/      # Aba Templates
+│   │       └── settings/       # Aba Configurações
 │   ├── models/                 # Domain layer
 │   │   ├── game_profile.rs     # Perfil de jogo
 │   │   └── game_template.rs    # Template de jogo
@@ -181,17 +191,17 @@ SaveGameWatcher/
 │   │   └── migrations/         # SQL migrations
 │   └── watcher/                # Background processing
 │       ├── file_watcher.rs     # Lógica de backup
-│       └── simple_watcher.rs   # Thread-based watching
-├── resources/
-│   └── sgw.db                  # Banco seed
+│       ├── simple_watcher.rs   # Thread-based watching
+│       └── process_monitor.rs  # Monitoramento de processos
 ├── build.rs                    # Build script
 └── Cargo.toml                  # Dependências
 ```
 
 > **Nota sobre Arquitetura UI**: O projeto usa **egui** com paradigma Immediate Mode:
-> - `app.rs`: Toda lógica e UI unificada em um arquivo
-> - Código direto e simples, sem separação forçada
-> - UI renderizada e estado modificado simultaneamente
+> - `app.rs`: Apenas orquestração (composição de componentes)
+> - `state.rs`: Estado centralizado organizado em sub-structs
+> - `actions/`: Lógica de negócio separada da UI
+> - `pages/` e `components/`: UI modular e reutilizável
 > - Ideal para utilitários leves como este
 
 ### Comandos Úteis

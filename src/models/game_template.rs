@@ -19,19 +19,14 @@ impl GameTemplate {
     pub fn expand_save_directory(&self) -> String {
         let mut path = self.save_directory.clone();
 
-        // Expande %APPDATA%
-        if let Ok(appdata) = std::env::var("APPDATA") {
-            path = path.replace("%APPDATA%", &appdata);
-        }
-
-        // Expande %USERPROFILE%
-        if let Ok(userprofile) = std::env::var("USERPROFILE") {
-            path = path.replace("%USERPROFILE%", &userprofile);
-        }
-
-        // Expande %LOCALAPPDATA%
-        if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
-            path = path.replace("%LOCALAPPDATA%", &localappdata);
+        for (var, key) in [
+            ("APPDATA", "%APPDATA%"),
+            ("USERPROFILE", "%USERPROFILE%"),
+            ("LOCALAPPDATA", "%LOCALAPPDATA%"),
+        ] {
+            if let Ok(value) = std::env::var(var) {
+                path = path.replace(key, &value);
+            }
         }
 
         path
