@@ -1,7 +1,7 @@
 mod file_watcher;
-mod simple_watcher;
 mod process_monitor;
+mod simple_watcher;
 
-pub use simple_watcher::{start_watching, WatcherHandle};
 #[allow(unused_imports)]
 pub use process_monitor::{ProcessMonitor, ProcessState};
+pub use simple_watcher::{start_watching, WatcherHandle};

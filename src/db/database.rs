@@ -159,7 +159,7 @@ impl Database {
         let mut stmt = self.conn.prepare(
             "SELECT last_profile_id, last_backup_dir, last_timeout_minutes FROM app_state WHERE id = 1"
         )?;
-        
+
         stmt.query_row([], |row| {
             Ok((
                 row.get(0).ok(),
@@ -170,7 +170,12 @@ impl Database {
     }
 
     /// Atualiza último perfil usado
-    pub fn update_last_profile(&self, profile_id: i64, backup_dir: &str, timeout: u32) -> Result<()> {
+    pub fn update_last_profile(
+        &self,
+        profile_id: i64,
+        backup_dir: &str,
+        timeout: u32,
+    ) -> Result<()> {
         self.conn.execute(
             "UPDATE app_state SET last_profile_id = ?1, last_backup_dir = ?2, last_timeout_minutes = ?3, updated_at = datetime('now') WHERE id = 1",
             rusqlite::params![profile_id, backup_dir, timeout]
@@ -184,7 +189,7 @@ impl Database {
             "SELECT id, template_id, name, save_path, backup_dir, timeout_minutes, exclude_regex, is_active, process_name, created_at 
              FROM game_profiles WHERE id = ?1"
         )?;
-        
+
         stmt.query_row([id], |row| {
             Ok(crate::models::GameProfile {
                 id: row.get(0)?,

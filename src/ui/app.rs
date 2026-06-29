@@ -38,32 +38,43 @@ impl eframe::App for App {
             }
         }
 
-        // Top panel - Barra superior com título e status
-        eframe::egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            ui.add_space(4.0);
+        // Header unificado: abas (esquerda) + título + status (direita)
+        eframe::egui::TopBottomPanel::top("header").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.heading("🎮 SaveSentry");
+                // Abas na esquerda
+                components::render_tab_bar(ui, &mut self.state);
+
                 ui.separator();
 
-                // Status do monitoramento
-                if self.state.active_watcher.is_some() {
-                    ui.label(
-                        eframe::egui::RichText::new("🟢 MONITORANDO")
-                            .color(eframe::egui::Color32::GREEN),
-                    );
+                // Título e status à direita
+                ui.label(eframe::egui::RichText::new("SaveSentry").heading().strong());
+
+                let status_text = if self.state.active_watcher.is_some() {
+                    eframe::egui::RichText::new("ATIVO")
+                        .color(eframe::egui::Color32::GREEN)
+                        .strong()
                 } else {
-                    ui.label(
-                        eframe::egui::RichText::new("⚫ PARADO").color(eframe::egui::Color32::GRAY),
-                    );
-                }
+                    eframe::egui::RichText::new("PARADO").color(eframe::egui::Color32::GRAY)
+                };
+                ui.label(status_text);
+
+                // Empurra resto para a direita (vazio, apenas para alinhar)
+                ui.with_layout(
+                    eframe::egui::Layout::right_to_left(eframe::egui::Align::Center),
+                    |ui| {
+                        ui.add_space(0.0);
+                    },
+                );
             });
-            ui.add_space(4.0);
+            ui.add_space(2.0);
         });
 
-        // Barra de abas
-        eframe::egui::TopBottomPanel::top("tab_bar_panel").show(ctx, |ui| {
-            components::render_tab_bar(ui, &mut self.state);
-        });
+        // Banner de mensagens global (condicional)
+        if self.state.error_message.is_some() || self.state.success_message.is_some() {
+            eframe::egui::TopBottomPanel::top("messages_banner").show(ctx, |ui| {
+                components::render_messages_banner(ui, &mut self.state);
+            });
+        }
 
         // Renderiza página ativa baseada na aba selecionada
         pages::render_active_page(ctx, &mut self.state);

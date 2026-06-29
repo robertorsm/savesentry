@@ -127,8 +127,14 @@ impl FileWatcher {
 
         // Ordena por data de modificação (mais antigo primeiro)
         entries.sort_by(|a, b| {
-            let time_a = a.metadata().and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
-            let time_b = b.metadata().and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
+            let time_a = a
+                .metadata()
+                .and_then(|m| m.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH);
+            let time_b = b
+                .metadata()
+                .and_then(|m| m.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH);
             time_a.cmp(&time_b)
         });
 

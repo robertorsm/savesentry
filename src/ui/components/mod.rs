@@ -9,5 +9,5 @@
 mod messages;
 mod tab_bar;
 
-pub use messages::render_messages;
+pub use messages::render_messages_banner;
 pub use tab_bar::render_tab_bar;

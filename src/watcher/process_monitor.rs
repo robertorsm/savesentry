@@ -2,8 +2,8 @@
 //! Implementa estratégia híbrida: polling rápido (1s) aguardando jogo,
 //! polling lento (10s) quando jogo está rodando
 
-use sysinfo::{ProcessRefreshKind, System, Pid};
 use std::time::Duration;
+use sysinfo::{Pid, ProcessRefreshKind, System};
 
 /// Estado do monitoramento de processo
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -45,12 +45,12 @@ impl ProcessMonitor {
             ProcessState::Waiting => {
                 // Fase 1: Busca rápida por novo processo (polling 1s)
                 // Usa refresh mínimo: apenas lista de processos, sem dados extras
-                self.system.refresh_processes_specifics(
-                    ProcessRefreshKind::new(),
-                );
+                self.system
+                    .refresh_processes_specifics(ProcessRefreshKind::new());
 
                 // Early exit: para assim que encontrar processo
-                if let Some((pid, _)) = self.system
+                if let Some((pid, _)) = self
+                    .system
                     .processes()
                     .iter()
                     .find(|(_, p)| p.name().to_lowercase() == self.target_name_lower)
@@ -92,9 +92,9 @@ impl ProcessMonitor {
     /// - Running: 10s (economia máxima, só detectar fechamento)
     pub fn get_poll_interval(&self) -> Duration {
         match self.state {
-            ProcessState::Waiting => Duration::from_secs(1),  // Latência baixa
+            ProcessState::Waiting => Duration::from_secs(1), // Latência baixa
             ProcessState::Running => Duration::from_secs(10), // Economia máxima
-            ProcessState::Stopped => Duration::from_secs(1),  // Volta para waiting
+            ProcessState::Stopped => Duration::from_secs(1), // Volta para waiting
         }
     }
 
@@ -122,4 +122,3 @@ mod tests {
         assert_eq!(monitor.target_name_lower, "game.exe");
     }
 }
-

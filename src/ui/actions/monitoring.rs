@@ -64,11 +64,14 @@ impl AppState {
                         let _ = self.db.update_last_profile(
                             profile.id,
                             &profile.backup_dir,
-                            profile.timeout_minutes
+                            profile.timeout_minutes,
                         );
 
                         #[cfg(debug_assertions)]
-                        println!("💾 Perfil salvo e registrado como último usado (ID: {})", new_id);
+                        println!(
+                            "💾 Perfil salvo e registrado como último usado (ID: {})",
+                            new_id
+                        );
                     }
                     Err(_e) => {
                         #[cfg(debug_assertions)]
@@ -91,7 +94,10 @@ impl AppState {
                         self.active_watcher = Some(handle);
 
                         #[cfg(debug_assertions)]
-                        println!("🚀 Auto-started watcher for {} (awaiting process)", template_name);
+                        println!(
+                            "🚀 Auto-started watcher for {} (awaiting process)",
+                            template_name
+                        );
                     }
                     Err(_e) => {
                         #[cfg(debug_assertions)]
@@ -177,7 +183,7 @@ impl AppState {
             let _ = self.db.update_last_profile(
                 profile.id,
                 &profile.backup_dir,
-                profile.timeout_minutes
+                profile.timeout_minutes,
             );
 
             profile.is_active = true;
@@ -247,9 +253,8 @@ impl AppState {
                 // Reinicia monitoramento se estava ativo
                 if was_monitoring {
                     // Agenda reinício após 2 segundos via timer não-bloqueante
-                    self.restart_monitoring_after = Some(
-                        std::time::Instant::now() + std::time::Duration::from_secs(2)
-                    );
+                    self.restart_monitoring_after =
+                        Some(std::time::Instant::now() + std::time::Duration::from_secs(2));
                 }
             }
             Err(e) => {

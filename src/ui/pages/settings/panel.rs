@@ -10,87 +10,78 @@ use eframe::egui;
 
 /// Renderiza o painel de configurações gerais (aba Settings)
 pub fn render_settings_panel(ui: &mut egui::Ui, state: &mut AppState) {
-    ui.add_space(16.0);
-    ui.heading("⚙️ Configurações Gerais");
+    ui.label(egui::RichText::new("Configurações").heading().strong());
     ui.separator();
-    ui.add_space(16.0);
+    ui.add_space(6.0);
 
-    egui::ScrollArea::vertical()
-        .auto_shrink([false; 2])
-        .show(ui, |ui| {
-            // Seção: Backup
-            ui.group(|ui| {
-                ui.label(
-                    egui::RichText::new("📦 Configurações de Backup")
-                        .strong()
-                        .size(16.0),
-                );
-                ui.add_space(8.0);
+    ui.columns(2, |cols| {
+        // Coluna esquerda: Backup
+        cols[0].group(|ui| {
+            ui.label(egui::RichText::new("Backup").strong().size(15.0));
+            ui.add_space(6.0);
 
-                egui::Grid::new("settings_backup_grid")
-                    .num_columns(2)
-                    .spacing([12.0, 12.0])
-                    .show(ui, |ui| {
-                        // Diretório de backup
-                        ui.label("Diretório de Backup:");
-                        ui.horizontal(|ui| {
-                            let available_width = (ui.available_width() - 100.0).max(50.0);
-                            ui.add_sized(
-                                [available_width, 20.0],
-                                egui::TextEdit::singleline(&mut state.config.backup_dir)
-                                    .hint_text("Onde salvar os backups"),
-                            );
-                            if ui.button("📁 Buscar").clicked() {
-                                if let Some(path) = rfd::FileDialog::new()
-                                    .set_title("Selecionar diretório de backups")
-                                    .pick_folder()
-                                {
-                                    state.set_backup_directory(path.display().to_string());
-                                }
-                            }
-                        });
-                        ui.end_row();
-
-                        // Timeout
-                        ui.label("Intervalo de Backup:");
-                        ui.horizontal(|ui| {
-                            if ui
-                                .add(
-                                    egui::DragValue::new(&mut state.config.timeout_minutes)
-                                        .speed(0.5)
-                                        .range(1..=1440),
-                                )
-                                .changed()
+            egui::Grid::new("settings_backup_grid")
+                .num_columns(2)
+                .spacing([10.0, 8.0])
+                .show(ui, |ui| {
+                    ui.label("Diretório:");
+                    ui.horizontal(|ui| {
+                        let btn_width = 70.0;
+                        let available_width = (ui.available_width() - btn_width).max(80.0);
+                        ui.add_sized(
+                            [available_width, 20.0],
+                            egui::TextEdit::singleline(&mut state.config.backup_dir)
+                                .hint_text("Onde salvar os backups"),
+                        );
+                        if ui.button("Buscar").clicked() {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .set_title("Selecionar diretório de backups")
+                                .pick_folder()
                             {
-                                state.set_timeout(state.config.timeout_minutes);
+                                state.set_backup_directory(path.display().to_string());
                             }
-                            ui.label("minutos");
-                        });
-                        ui.end_row();
+                        }
                     });
-            });
+                    ui.end_row();
 
-            ui.add_space(16.0);
-
-            // Seção: Interface
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("🎨 Interface").strong().size(16.0));
-                ui.add_space(8.0);
-
-                ui.label("Tema: Escuro (padrão)");
-                ui.label("Intervalo de atualização: 1 segundo");
-            });
-
-            ui.add_space(16.0);
-
-            // Seção: Informações
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("ℹ️ Informações").strong().size(16.0));
-                ui.add_space(8.0);
-
-                ui.label(format!("Versão: {}", env!("CARGO_PKG_VERSION")));
-                ui.label("SaveSentry - Monitor e Backup Automático de Saves");
-                ui.label("Desenvolvido em Rust + egui");
-            });
+                    ui.label("Intervalo:");
+                    ui.horizontal(|ui| {
+                        if ui
+                            .add_sized(
+                                [70.0, 20.0],
+                                egui::DragValue::new(&mut state.config.timeout_minutes)
+                                    .speed(0.5)
+                                    .range(1..=1440),
+                            )
+                            .changed()
+                        {
+                            state.set_timeout(state.config.timeout_minutes);
+                        }
+                        ui.label("minutos");
+                    });
+                    ui.end_row();
+                });
         });
+
+        // Coluna direita: Interface
+        cols[1].group(|ui| {
+            ui.label(egui::RichText::new("Interface").strong().size(15.0));
+            ui.add_space(6.0);
+            ui.label("Tema: Escuro (padrão)");
+            ui.label("Atualização: 1 segundo");
+        });
+    });
+
+    ui.add_space(12.0);
+
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(format!(
+                "SaveSentry v{} · Rust + egui",
+                env!("CARGO_PKG_VERSION")
+            ))
+            .weak()
+            .size(11.0),
+        );
+    });
 }

@@ -8,16 +8,21 @@
 
 pub mod manager;
 
-pub use manager::render_templates_manager;
-
 use crate::ui::state::AppState;
 use eframe::egui;
 
 /// Renderiza a aba de templates
 pub fn render(ctx: &egui::Context, state: &mut AppState) {
+    egui::SidePanel::left("templates_list_panel")
+        .resizable(true)
+        .default_width(280.0)
+        .width_range(220.0..=400.0)
+        .show(ctx, |ui| {
+            manager::render_templates_list(ui, state);
+        });
+
     egui::CentralPanel::default().show(ctx, |ui| {
-        crate::ui::components::render_messages(ui, state);
-        ui.add_space(8.0);
-        render_templates_manager(ui, state);
+        ui.add_space(6.0);
+        manager::render_template_form(ui, state);
     });
 }

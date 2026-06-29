@@ -23,38 +23,32 @@ pub fn render(ctx: &egui::Context, state: &mut AppState) {
     // Side panel - Lista de backups (histórico)
     egui::SidePanel::left("backup_history_panel")
         .resizable(true)
-        .default_width(250.0)
-        .width_range(200.0..=400.0)
+        .default_width(220.0)
+        .width_range(180.0..=350.0)
         .show(ctx, |ui| {
             render_backup_history(ui, state);
         });
 
-    // Central panel - Área principal
+    // Painel superior: Configuração (altura natural)
+    egui::TopBottomPanel::top("config_area")
+        .frame(egui::Frame::group(&ctx.style()).fill(ctx.style().visuals.faint_bg_color))
+        .show(ctx, |ui| {
+            render_config_panel(ui, state);
+        });
+
+    // Painel inferior: Save Atual (preenche todo espaço restante)
     egui::CentralPanel::default().show(ctx, |ui| {
-        // Mensagens de erro/sucesso
-        crate::ui::components::render_messages(ui, state);
-
-        ui.add_space(8.0);
-
-        // Painel superior: Template selection + configurações
-        egui::Frame::group(ui.style())
-            .fill(ui.style().visuals.faint_bg_color)
-            .inner_margin(12.0)
-            .show(ui, |ui| {
-                render_config_panel(ui, state);
-            });
-
-        ui.add_space(12.0);
-
-        // Painel inferior: Informações do save atual
+        let available = ui.available_height();
         egui::Frame::group(ui.style())
             .fill(if state.active_watcher.is_some() {
                 egui::Color32::from_rgb(20, 60, 30)
             } else {
                 ui.style().visuals.faint_bg_color
             })
-            .inner_margin(12.0)
+            .inner_margin(8.0)
             .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.set_min_height(available - 16.0);
                 render_save_info(ui, state);
             });
     });

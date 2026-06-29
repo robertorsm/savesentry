@@ -104,3 +104,5 @@ make build-windows   # release build + size check
 - **Save info throttle**: 2s max refresh rate.
 - **Portable**: DB at `<exe_dir>/savesentry.db`. No registry.
 - **Windows subsystem**: `build.rs` sets `/SUBSYSTEM:WINDOWS` for release.
+
+

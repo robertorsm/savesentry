@@ -41,9 +41,8 @@ Monitore seus arquivos de save em tempo real e crie backups automáticos em form
 
 ### Download
 
-1. Baixe o instalador da [última release](../../releases/latest)
-2. Execute `SaveSentry_Setup.exe`
-3. Siga as instruções do instalador
+1. Baixe o executável da [última release](../../releases/latest)
+2. Execute `SaveSentry.exe` diretamente — não requer instalação
 
 ### Build do Código Fonte
 

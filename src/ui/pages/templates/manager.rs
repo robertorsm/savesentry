@@ -7,42 +7,23 @@
 use crate::ui::state::AppState;
 use eframe::egui;
 
-/// Renderiza o gerenciador de templates (aba Templates)
-pub fn render_templates_manager(ui: &mut egui::Ui, state: &mut AppState) {
-    // Painel esquerdo - Lista de templates
-    egui::SidePanel::left("templates_list_panel")
-        .resizable(true)
-        .default_width(300.0)
-        .width_range(250.0..=400.0)
-        .show_inside(ui, |ui| {
-            render_templates_list(ui, state);
-        });
-
-    // Painel direito - Formulário
-    egui::CentralPanel::default().show_inside(ui, |ui| {
-        render_template_form(ui, state);
-    });
-}
-
 /// Renderiza a lista de templates
-fn render_templates_list(ui: &mut egui::Ui, state: &mut AppState) {
-    ui.add_space(8.0);
-    ui.heading("Templates Disponíveis");
+pub(super) fn render_templates_list(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.add_space(4.0);
+    ui.heading("Templates");
     ui.separator();
-    ui.add_space(8.0);
+    ui.add_space(4.0);
 
-    // Botão novo template
     if ui
-        .button("➕ Novo Template")
-        .on_hover_text("Criar um novo template personalizado")
+        .button("Novo")
+        .on_hover_text("Criar template personalizado")
         .clicked()
     {
         state.clear_template_form();
     }
 
-    ui.add_space(8.0);
+    ui.add_space(6.0);
 
-    // Otimização: captura apenas IDs para iteração, evita clone de Vec<GameTemplate>
     let template_ids: Vec<i64> = state.templates.iter().map(|t| t.id).collect();
     let mut clicked_edit: Option<i64> = None;
     let mut clicked_delete: Option<i64> = None;
@@ -60,17 +41,15 @@ fn render_templates_list(ui: &mut egui::Ui, state: &mut AppState) {
                         } else {
                             ui.style().visuals.faint_bg_color
                         })
-                        .inner_margin(10.0)
+                        .inner_margin(8.0)
                         .show(ui, |ui| {
                             ui.set_min_width(ui.available_width());
 
                             ui.horizontal(|ui| {
-                                // Nome do template
-                                ui.label(egui::RichText::new(&template.name).strong().size(14.0));
-
+                                ui.label(egui::RichText::new(&template.name).strong().size(13.0));
                                 if template.is_official {
                                     ui.label(
-                                        egui::RichText::new("✓ Oficial")
+                                        egui::RichText::new("(oficial)")
                                             .weak()
                                             .size(11.0)
                                             .color(egui::Color32::from_rgb(100, 200, 100)),
@@ -78,46 +57,32 @@ fn render_templates_list(ui: &mut egui::Ui, state: &mut AppState) {
                                 }
                             });
 
-                            ui.add_space(4.0);
-
                             ui.label(
                                 egui::RichText::new(&template.process_name)
                                     .weak()
                                     .size(11.0),
                             );
 
-                            ui.add_space(8.0);
+                            ui.add_space(6.0);
 
                             ui.horizontal(|ui| {
-                                // Botão editar
-                                if ui
-                                    .button("✏️ Editar")
-                                    .on_hover_text("Editar este template")
-                                    .clicked()
-                                {
+                                if ui.button("Editar").on_hover_text("Editar").clicked() {
                                     clicked_edit = Some(template.id);
                                 }
-
                                 ui.add_space(4.0);
-
-                                // Botão excluir (apenas para customizados)
                                 if !template.is_official
-                                    && ui
-                                        .button("🗑️ Excluir")
-                                        .on_hover_text("Excluir este template")
-                                        .clicked()
+                                    && ui.button("Excluir").on_hover_text("Excluir").clicked()
                                 {
                                     clicked_delete = Some(template.id);
                                 }
                             });
                         });
 
-                    ui.add_space(4.0);
+                    ui.add_space(3.0);
                 }
             }
         });
 
-    // Processar ações APÓS o loop
     if let Some(template_id) = clicked_edit {
         state.select_template_for_edit(template_id);
     }
@@ -127,40 +92,39 @@ fn render_templates_list(ui: &mut egui::Ui, state: &mut AppState) {
 }
 
 /// Renderiza o formulário de template
-fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
-    ui.add_space(8.0);
+pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.add_space(4.0);
 
     if state.template_form.is_new {
-        ui.heading("Criar Novo Template");
+        ui.heading("Novo Template");
     } else {
         ui.heading("Editar Template");
     }
 
     ui.separator();
-    ui.add_space(12.0);
+    ui.add_space(8.0);
 
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
         .show(ui, |ui| {
             egui::Grid::new("template_form_grid")
                 .num_columns(2)
-                .spacing([12.0, 12.0])
+                .spacing([10.0, 8.0])
                 .show(ui, |ui| {
-                    // Nome
-                    ui.label("Nome do Jogo:");
+                    ui.label("Nome:");
                     ui.text_edit_singleline(&mut state.template_form.name);
                     ui.end_row();
 
-                    // Diretório de save
-                    ui.label("Diretório de Save:");
+                    ui.label("Save em:");
                     ui.horizontal(|ui| {
-                        let available_width = (ui.available_width() - 100.0).max(50.0);
+                        let btn_width = 70.0;
+                        let available_width = (ui.available_width() - btn_width).max(80.0);
                         ui.add_sized(
                             [available_width, 20.0],
                             egui::TextEdit::singleline(&mut state.template_form.save_dir)
                                 .hint_text("%APPDATA%\\Jogo\\saves"),
                         );
-                        if ui.button("📁").clicked() {
+                        if ui.button("Buscar").clicked() {
                             if let Some(path) = rfd::FileDialog::new()
                                 .set_title("Selecionar diretório de saves")
                                 .pick_folder()
@@ -171,25 +135,21 @@ fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                     });
                     ui.end_row();
 
-                    // Nome do processo
-                    ui.label("Nome do Processo:");
+                    ui.label("Processo:");
                     ui.text_edit_singleline(&mut state.template_form.process);
                     ui.end_row();
 
-                    // Padrão de arquivos
-                    ui.label("Padrão de Arquivos:");
+                    ui.label("Padrão:");
                     ui.text_edit_singleline(&mut state.template_form.pattern);
                     ui.end_row();
 
-                    // Regex de exclusão
-                    ui.label("Regex de Exclusão:");
+                    ui.label("Exclusão:");
                     ui.text_edit_singleline(&mut state.template_form.exclude);
                     ui.end_row();
                 });
 
-            ui.add_space(16.0);
+            ui.add_space(12.0);
 
-            // Botões de ação
             ui.horizontal(|ui| {
                 if state.template_form.is_new {
                     let can_create = !state.template_form.name.trim().is_empty()
@@ -199,9 +159,11 @@ fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                     if ui
                         .add_enabled(
                             can_create,
-                            egui::Button::new("💾 Criar Template")
-                                .fill(egui::Color32::from_rgb(40, 120, 40))
-                                .min_size(egui::vec2(140.0, 32.0)),
+                            egui::Button::new(
+                                egui::RichText::new("Criar").color(egui::Color32::WHITE),
+                            )
+                            .fill(egui::Color32::from_rgb(40, 120, 40))
+                            .min_size(egui::vec2(120.0, 30.0)),
                         )
                         .on_hover_text("Salvar novo template")
                         .clicked()
@@ -210,10 +172,10 @@ fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                     }
                 } else {
                     let save_button = egui::Button::new(
-                        egui::RichText::new("💾 Salvar Alterações").color(egui::Color32::WHITE),
+                        egui::RichText::new("Salvar").color(egui::Color32::WHITE),
                     )
                     .fill(egui::Color32::from_rgb(40, 120, 40))
-                    .min_size(egui::vec2(140.0, 32.0));
+                    .min_size(egui::vec2(120.0, 30.0));
 
                     if ui
                         .add(save_button)
@@ -224,25 +186,24 @@ fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                     }
                 }
 
-                ui.add_space(8.0);
+                ui.add_space(6.0);
 
-                let cancel_button =
-                    egui::Button::new("❌ Cancelar").min_size(egui::vec2(100.0, 32.0));
-
-                if ui.add(cancel_button).clicked() {
+                if ui
+                    .add(egui::Button::new("Cancelar").min_size(egui::vec2(90.0, 30.0)))
+                    .clicked()
+                {
                     state.clear_template_form();
                 }
             });
 
             ui.add_space(12.0);
 
-            // Dicas
             ui.group(|ui| {
-                ui.label(egui::RichText::new("💡 Dicas:").strong());
-                ui.add_space(4.0);
-                ui.label("• Use variáveis de ambiente: %APPDATA%, %USERPROFILE%, %LOCALAPPDATA%");
-                ui.label("• Padrão de arquivos: *.sav, *.dat, save*.* etc.");
-                ui.label("• Regex exclusão (opcional): .*\\.tmp$, .*\\.bak$");
+                ui.label(egui::RichText::new("Dicas").strong());
+                ui.add_space(2.0);
+                ui.label("• Variáveis: %APPDATA%, %USERPROFILE%, %LOCALAPPDATA%");
+                ui.label("• Padrões: *.sav, *.dat, save*.*");
+                ui.label("• Regex exclusão: .*\\.tmp$, .*\\.bak$");
             });
         });
 }

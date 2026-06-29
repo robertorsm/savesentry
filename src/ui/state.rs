@@ -261,8 +261,10 @@ impl AppState {
                                 self.active_watcher = Some(handle);
 
                                 #[cfg(debug_assertions)]
-                                println!("✅ Auto-started watcher for process: {:?}",
-                                    self.active_profile.as_ref().unwrap().process_name);
+                                println!(
+                                    "✅ Auto-started watcher for process: {:?}",
+                                    self.active_profile.as_ref().unwrap().process_name
+                                );
                             }
                             Err(_e) => {
                                 #[cfg(debug_assertions)]

@@ -10,8 +10,7 @@ use eframe::egui;
 /// Renderiza a aba de configurações
 pub fn render(ctx: &egui::Context, state: &mut AppState) {
     egui::CentralPanel::default().show(ctx, |ui| {
-        crate::ui::components::render_messages(ui, state);
-        ui.add_space(8.0);
+        ui.add_space(6.0);
         render_settings_panel(ui, state);
     });
 }
