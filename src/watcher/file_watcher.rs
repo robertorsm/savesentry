@@ -1,34 +1,43 @@
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 /// Gerenciador de estado e lógica de backup para um perfil
 #[derive(Debug)]
 pub struct FileWatcher {
+    #[allow(dead_code)]
     save_path: PathBuf,
     backup_dir: PathBuf,
-    timeout_minutes: u32,
+    backup_delay_minutes: u32,
     last_backup: Option<SystemTime>,
     exclude_regex: Option<regex::Regex>,
+    save_pattern: Option<glob::Pattern>,
+    last_backup_time: Arc<AtomicU64>,
 }
 
 impl FileWatcher {
-    /// Cria um novo gerenciador de backup
     pub fn new(
         save_path: PathBuf,
         backup_dir: PathBuf,
-        timeout_minutes: u32,
+        backup_delay_minutes: u32,
         exclude_regex_str: Option<String>,
+        save_pattern_str: Option<String>,
+        last_backup_time: Arc<AtomicU64>,
     ) -> Self {
         let exclude_regex = exclude_regex_str.and_then(|s| regex::Regex::new(&s).ok());
+        let save_pattern = save_pattern_str.and_then(|s| glob::Pattern::new(&s).ok());
 
         Self {
             save_path,
             backup_dir,
-            timeout_minutes,
+            backup_delay_minutes,
             last_backup: None,
             exclude_regex,
+            save_pattern,
+            last_backup_time,
         }
     }
 
@@ -42,6 +51,21 @@ impl FileWatcher {
         false
     }
 
+    pub fn matches_pattern(&self, path: &std::path::Path) -> bool {
+        if let Some(pattern) = &self.save_pattern {
+            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                let opts = glob::MatchOptions {
+                    case_sensitive: cfg!(not(target_os = "windows")),
+                    require_literal_separator: false,
+                    require_literal_leading_dot: false,
+                };
+                return pattern.matches_with(file_name, opts);
+            }
+            return false;
+        }
+        true
+    }
+
     /// Verifica se o timeout expirou desde o último backup
     pub fn should_backup(&self) -> bool {
         match self.last_backup {
@@ -51,56 +75,78 @@ impl FileWatcher {
                     .duration_since(last)
                     .unwrap_or(Duration::from_secs(0));
 
-                elapsed >= Duration::from_secs(self.timeout_minutes as u64 * 60)
+                elapsed >= Duration::from_secs(self.backup_delay_minutes as u64 * 60)
             }
         }
     }
 
-    /// Cria um backup do arquivo de save em formato ZIP
-    pub fn create_backup(&mut self) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        // Verifica se deve fazer backup
+    pub fn create_backup(
+        &mut self,
+        _source_path: &std::path::Path,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         if !self.should_backup() {
-            return Err("Timeout ainda não expirou".into());
+            return Err("Timeout ainda nao expirou".into());
         }
 
-        // Cria diretório de backup se não existir
         fs::create_dir_all(&self.backup_dir)?;
 
-        // Verifica se o arquivo principal deve ser excluído (caso raro, mas possível se o regex for muito abrangente)
-        if self.should_exclude(&self.save_path) {
-            return Err("Arquivo ignorado pelo filtro de exclusão".into());
-        }
-
-        // Gera nome do backup com timestamp pt-BR
         let now = chrono::Local::now();
         let backup_name = format!("backup_{}.zip", now.format("%d-%m-%Y_%H-%M-%S"));
         let backup_path = self.backup_dir.join(&backup_name);
 
-        // Cria arquivo ZIP
         let file = fs::File::create(&backup_path)?;
         let mut zip = zip::ZipWriter::new(file);
 
-        // Adiciona o arquivo de save ao ZIP via streaming (evita OOM em arquivos grandes)
         let options = zip::write::FileOptions::<()>::default()
             .compression_method(zip::CompressionMethod::Deflated);
 
-        let save_filename = self
-            .save_path
-            .file_name()
-            .ok_or("Arquivo de save não tem nome")?
-            .to_string_lossy();
+        let save_dir = std::path::Path::new(&self.save_path);
+        let match_opts = glob::MatchOptions {
+            case_sensitive: cfg!(not(target_os = "windows")),
+            require_literal_separator: false,
+            require_literal_leading_dot: false,
+        };
 
-        zip.start_file(save_filename.as_ref(), options)?;
+        let mut files_added = 0;
+        if let Ok(entries) = fs::read_dir(save_dir) {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    if metadata.is_file() {
+                        if let Some(name) = entry.file_name().to_str() {
+                            if let Some(pattern) = &self.save_pattern {
+                                if !pattern.matches_with(name, match_opts) {
+                                    continue;
+                                }
+                            }
+                            if self.should_exclude(&entry.path()) {
+                                continue;
+                            }
 
-        let mut source = fs::File::open(&self.save_path)?;
-        io::copy(&mut source, &mut zip)?;
+                            zip.start_file(name, options)?;
+                            let mut source = fs::File::open(entry.path())?;
+                            io::copy(&mut source, &mut zip)?;
+                            files_added += 1;
+                        }
+                    }
+                }
+            }
+        }
 
         zip.finish()?;
 
-        // Atualiza timestamp do último backup
-        self.last_backup = Some(SystemTime::now());
+        if files_added == 0 {
+            let _ = fs::remove_file(&backup_path);
+            return Err("Nenhum arquivo encontrado para backup".into());
+        }
 
-        // Rotação: mantém no máximo 50 backups por perfil
+        let now = SystemTime::now();
+        self.last_backup = Some(now);
+        self.last_backup_time.store(
+            now.duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+            Ordering::Relaxed,
+        );
         self.rotate_backups()?;
 
         Ok(backup_path)

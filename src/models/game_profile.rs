@@ -8,8 +8,9 @@ pub struct GameProfile {
     pub name: String,             // Nome do jogo
     pub save_path: String,        // Caminho do arquivo de save
     pub backup_dir: String,       // Diretório onde backups serão salvos
-    pub timeout_minutes: u32,     // Intervalo mínimo entre backups (em minutos)
+    pub backup_delay_minutes: u32, // Intervalo mínimo entre backups (em minutos)
     pub exclude_regex: Option<String>, // Regex de exclusão (pode sobrescrever template)
+    pub save_pattern: Option<String>,  // Padrão glob de inclusão (ex: *.sav)
     pub is_active: bool,          // Se o monitoramento está ativo
     pub process_name: Option<String>, // Nome do processo para monitoramento (ex: game.exe)
     pub created_at: String,       // Data de criação do perfil
@@ -18,15 +19,16 @@ pub struct GameProfile {
 impl GameProfile {
     /// Cria um novo perfil de jogo
     #[allow(dead_code)]
-    pub fn new(name: String, save_path: String, backup_dir: String, timeout_minutes: u32) -> Self {
+    pub fn new(name: String, save_path: String, backup_dir: String, backup_delay_minutes: u32) -> Self {
         Self {
             id: 0,
             template_id: None,
             name,
             save_path,
             backup_dir,
-            timeout_minutes,
+            backup_delay_minutes,
             exclude_regex: None,
+            save_pattern: None,
             is_active: false,
             process_name: None,
             created_at: chrono::Local::now().to_rfc3339(),
@@ -39,7 +41,7 @@ impl GameProfile {
         template_id: i64,
         template: &crate::models::GameTemplate,
         backup_dir: String,
-        timeout_minutes: u32,
+        backup_delay_minutes: u32,
     ) -> Self {
         Self {
             id: 0,
@@ -47,8 +49,9 @@ impl GameProfile {
             name: template.name.clone(),
             save_path: template.expand_save_directory(),
             backup_dir,
-            timeout_minutes,
+            backup_delay_minutes,
             exclude_regex: template.exclude_regex.clone(),
+            save_pattern: Some(template.save_pattern.clone()),
             is_active: false,
             process_name: Some(template.process_name.clone()),
             created_at: chrono::Local::now().to_rfc3339(),

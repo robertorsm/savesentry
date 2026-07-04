@@ -1,10 +1,4 @@
 //! Painel de configuração - Aba Principal
-//!
-//! Permite:
-//! - Seleção de template
-//! - Configuração de diretório de backup
-//! - Ajuste de timeout
-//! - Controles de monitoramento
 
 use crate::ui::state::AppState;
 use eframe::egui;
@@ -44,49 +38,12 @@ pub fn render_config_panel(ui: &mut egui::Ui, state: &mut AppState) {
             }
 
             ui.end_row();
-
-            ui.label("Backup em:");
-            ui.horizontal(|ui| {
-                let btn_width = 70.0;
-                let available_width = (ui.available_width() - btn_width).max(80.0);
-                ui.add_sized(
-                    [available_width, 20.0],
-                    egui::TextEdit::singleline(&mut state.config.backup_dir).hint_text("Diretório"),
-                );
-                if ui.button("Buscar").clicked() {
-                    if let Some(path) = rfd::FileDialog::new()
-                        .set_title("Selecionar diretório")
-                        .pick_folder()
-                    {
-                        state.set_backup_directory(path.display().to_string());
-                    }
-                }
-            });
-            ui.end_row();
-
-            ui.label("Timeout:");
-            ui.horizontal(|ui| {
-                if ui
-                    .add_sized(
-                        [70.0, 20.0],
-                        egui::DragValue::new(&mut state.config.timeout_minutes)
-                            .speed(0.5)
-                            .range(1..=1440),
-                    )
-                    .changed()
-                {
-                    state.set_timeout(state.config.timeout_minutes);
-                }
-                ui.label("min");
-            });
-            ui.end_row();
         });
 
     ui.add_space(8.0);
 
     ui.horizontal(|ui| {
         let can_start = state.selected_template_id.is_some()
-            && !state.config.backup_dir.is_empty()
             && state.active_watcher.is_none();
 
         let can_stop = state.active_watcher.is_some();

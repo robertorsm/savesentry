@@ -87,13 +87,35 @@ cargo fmt
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 
-# Release (size-optimized, target < 6MB)
+# Release (size-optimized)
 cargo build --profile release-windows
 
 # Makefile shortcuts
 make validate    # fmt + clippy + check
-make build-windows   # release build + size check
+make build-windows   # release build
 ```
+
+## Path Expansion
+
+`GameTemplate::expand_save_directory()` and `expand_backup_directory()` support environment variable substitution:
+
+| Variable | Example Expanded Value | Source |
+|---|---|---|
+| `%APPDATA%` | `C:\Users\User\AppData\Roaming` | Windows env |
+| `%LOCALAPPDATA%` | `C:\Users\User\AppData\Local` | Windows env |
+| `%USERPROFILE%` | `C:\Users\User` | Windows env |
+| `%USERNAME%` | `User` | Windows env |
+| `%HOMEDRIVE%` | `C:` | Windows env |
+| `%HOMEPATH%` | `\Users\User` | Windows env |
+| `%PROGRAMFILES%` | `C:\Program Files` | Windows env |
+| `%PROGRAMFILES(X86)%` | `C:\Program Files (x86)` | Windows env |
+| `%PROGRAMDATA%` | `C:\ProgramData` | Windows env |
+| `%PUBLIC%` | `C:\Users\Public` | Windows env |
+| `%TEMP%` / `%TMP%` | `C:\Users\User\AppData\Local\Temp` | Windows env |
+| `%STEAM_USERDATA%` | `C:\Program Files (x86)\Steam\userdata` | Detected at runtime |
+| `%STEAMID%` | `76561198000000000` | First numeric folder in `userdata/` |
+
+**Steam detection**: Searches `%LOCALAPPDATA%`, `%ProgramFiles(x86)%`, `%ProgramFiles%`, and `%USERPROFILE%` for `Steam\userdata`, then takes the first all-numeric subdirectory name as the SteamID.
 
 ## Notes
 

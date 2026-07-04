@@ -14,6 +14,7 @@ impl AppState {
             let template_name = t.name.clone();
             let save_dir = t.expand_save_directory();
             let exclude_regex = t.exclude_regex.clone();
+            let save_pattern = Some(t.save_pattern.clone());
             let process_name = Some(t.process_name.clone());
 
             // 🔄 NOVO: Para watcher anterior se estiver ativo (troca de perfil)
@@ -21,7 +22,7 @@ impl AppState {
                 #[cfg(debug_assertions)]
                 println!("🔄 Parando watcher anterior para trocar de perfil...");
 
-                self.active_watcher = None; // Para watcher anterior
+                self.active_watcher = None;
 
                 if let Some(ref mut old_profile) = self.active_profile {
                     old_profile.is_active = false;
@@ -30,32 +31,24 @@ impl AppState {
 
             self.selected_template_id = Some(template_id);
 
-            // Cria subdiretório específico para este jogo dentro do backup_dir global
-            let game_backup_dir = if self.config.backup_dir.is_empty() {
-                String::new()
-            } else {
-                std::path::Path::new(&self.config.backup_dir)
-                    .join(&template_name)
-                    .to_string_lossy()
-                    .to_string()
-            };
+            let game_backup_dir = t.expand_backup_directory();
 
             // Cria perfil ativo baseado no template
             let mut profile = GameProfile {
-                id: 0, // ID temporário (não salvo no banco)
+                id: 0,
                 name: template_name.clone(),
                 save_path: save_dir.clone(),
                 backup_dir: game_backup_dir,
-                timeout_minutes: self.config.timeout_minutes,
+                backup_delay_minutes: t.backup_delay_minutes,
                 exclude_regex,
+                save_pattern,
                 is_active: false,
                 template_id: Some(template_id),
                 process_name,
                 created_at: chrono::Local::now().to_rfc3339(),
             };
 
-            // 💾 Salva perfil no banco imediatamente se diretório de backup está configurado
-            if !self.config.backup_dir.is_empty() {
+            if !profile.backup_dir.is_empty() {
                 match self.db.insert_game_profile(&profile) {
                     Ok(new_id) => {
                         profile.id = new_id;
@@ -64,7 +57,7 @@ impl AppState {
                         let _ = self.db.update_last_profile(
                             profile.id,
                             &profile.backup_dir,
-                            profile.timeout_minutes,
+                            profile.backup_delay_minutes,
                         );
 
                         #[cfg(debug_assertions)]
@@ -83,6 +76,7 @@ impl AppState {
 
             self.active_profile = Some(profile.clone());
             self.current_save_path = save_dir;
+            self.current_save_file.clear();
             self.update_save_info();
 
             self.success_message = Some(format!("Template '{}' selecionado", template_name));
@@ -110,35 +104,9 @@ impl AppState {
         }
     }
 
-    /// Configura diretório de backup
     pub fn set_backup_directory(&mut self, dir: String) {
         self.config.backup_dir = dir;
-
-        // Atualiza perfil ativo se existir
-        if let Some(ref mut profile) = self.active_profile {
-            // Cria subdiretório específico para o jogo
-            if self.config.backup_dir.is_empty() {
-                profile.backup_dir = String::new();
-            } else {
-                profile.backup_dir = std::path::Path::new(&self.config.backup_dir)
-                    .join(&profile.name)
-                    .to_string_lossy()
-                    .to_string();
-            }
-        }
-
-        // Recarrega histórico de backups
         self.reload_backup_history();
-    }
-
-    /// Configura timeout de backup
-    pub fn set_timeout(&mut self, minutes: u32) {
-        self.config.timeout_minutes = minutes;
-
-        // Atualiza perfil ativo se existir
-        if let Some(ref mut profile) = self.active_profile {
-            profile.timeout_minutes = minutes;
-        }
     }
 
     /// Inicia o monitoramento
@@ -146,12 +114,6 @@ impl AppState {
         // Valida se tem perfil ativo
         if self.active_profile.is_none() {
             self.error_message = Some("Selecione um template primeiro".to_string());
-            return;
-        }
-
-        // Valida se tem diretório de backup
-        if self.config.backup_dir.is_empty() {
-            self.error_message = Some("Configure o diretório de backup".to_string());
             return;
         }
 
@@ -163,7 +125,11 @@ impl AppState {
 
         // Pega o perfil ativo
         if let Some(profile) = &mut self.active_profile {
-            // Salva perfil no banco se ainda não foi salvo (id == 0)
+            if profile.backup_dir.is_empty() {
+                self.error_message = Some("Configure o diretório de backup no template".to_string());
+                return;
+            }
+
             if profile.id == 0 {
                 match self.db.insert_game_profile(profile) {
                     Ok(new_id) => {
@@ -179,11 +145,10 @@ impl AppState {
                 }
             }
 
-            // 🚀 Salva como último perfil usado
             let _ = self.db.update_last_profile(
                 profile.id,
                 &profile.backup_dir,
-                profile.timeout_minutes,
+                profile.backup_delay_minutes,
             );
 
             profile.is_active = true;
@@ -193,7 +158,8 @@ impl AppState {
                 Ok(handle) => {
                     self.active_watcher = Some(handle);
                     self.success_message = Some("Monitoramento iniciado".to_string());
-                    self.invalidate_backup_cache(); // Invalida cache para forçar reload
+                    self.invalidate_backup_cache();
+                    self.update_save_info();
                     self.reload_backup_history();
                 }
                 Err(e) => {

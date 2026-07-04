@@ -36,15 +36,16 @@ impl Database {
     /// Insere um novo perfil de jogo
     pub fn insert_game_profile(&self, profile: &crate::models::GameProfile) -> Result<i64> {
         self.conn.execute(
-            "INSERT INTO game_profiles (template_id, name, save_path, backup_dir, timeout_minutes, exclude_regex, is_active, process_name, created_at) 
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO game_profiles (template_id, name, save_path, backup_dir, backup_delay_minutes, exclude_regex, save_pattern, is_active, process_name, created_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             rusqlite::params![
                 profile.template_id,
                 profile.name,
                 profile.save_path,
                 profile.backup_dir,
-                profile.timeout_minutes,
+                profile.backup_delay_minutes,
                 profile.exclude_regex,
+                &profile.save_pattern,
                 profile.is_active as i32,
                 &profile.process_name,
                 profile.created_at,
@@ -58,7 +59,7 @@ impl Database {
     /// Lista todos os templates de jogos
     pub fn list_game_templates(&self) -> Result<Vec<crate::models::GameTemplate>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, save_directory, process_name, save_pattern, exclude_regex, version, is_official, created_at 
+            "SELECT id, name, save_directory, process_name, save_pattern, exclude_regex, backup_dir, backup_delay_minutes, version, is_official, created_at 
              FROM game_templates ORDER BY name ASC",
         )?;
 
@@ -71,9 +72,11 @@ impl Database {
                     process_name: row.get(3)?,
                     save_pattern: row.get(4)?,
                     exclude_regex: row.get(5)?,
-                    version: row.get(6)?,
-                    is_official: row.get::<_, i32>(7)? != 0,
-                    created_at: row.get(8)?,
+                    backup_dir: row.get(6)?,
+                    backup_delay_minutes: row.get(7)?,
+                    version: row.get(8)?,
+                    is_official: row.get::<_, i32>(9)? != 0,
+                    created_at: row.get(10)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -89,16 +92,20 @@ impl Database {
         process_name: &str,
         save_pattern: &str,
         exclude_regex: Option<&str>,
+        backup_dir: &str,
+        backup_delay_minutes: u32,
     ) -> Result<i64> {
         self.conn.execute(
-            "INSERT INTO game_templates (name, save_directory, process_name, save_pattern, exclude_regex, version, is_official, created_at) 
-             VALUES (?1, ?2, ?3, ?4, ?5, 1, 0, datetime('now'))",
+            "INSERT INTO game_templates (name, save_directory, process_name, save_pattern, exclude_regex, backup_dir, backup_delay_minutes, version, is_official, created_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, 0, datetime('now'))",
             rusqlite::params![
                 name,
                 save_directory,
                 process_name,
                 save_pattern,
                 exclude_regex,
+                backup_dir,
+                backup_delay_minutes,
             ],
         )?;
         Ok(self.conn.last_insert_rowid())
@@ -113,17 +120,21 @@ impl Database {
         process_name: &str,
         save_pattern: &str,
         exclude_regex: Option<&str>,
+        backup_dir: &str,
+        backup_delay_minutes: u32,
     ) -> Result<()> {
         self.conn.execute(
             "UPDATE game_templates 
-             SET name = ?1, save_directory = ?2, process_name = ?3, save_pattern = ?4, exclude_regex = ?5 
-             WHERE id = ?6",
+             SET name = ?1, save_directory = ?2, process_name = ?3, save_pattern = ?4, exclude_regex = ?5, backup_dir = ?6, backup_delay_minutes = ?7 
+             WHERE id = ?8",
             rusqlite::params![
                 name,
                 save_directory,
                 process_name,
                 save_pattern,
                 exclude_regex,
+                backup_dir,
+                backup_delay_minutes,
                 id,
             ],
         )?;
@@ -157,7 +168,7 @@ impl Database {
     /// Obtém o estado da aplicação (último perfil usado, configurações)
     pub fn get_app_state(&self) -> Result<(Option<i64>, Option<String>, u32)> {
         let mut stmt = self.conn.prepare(
-            "SELECT last_profile_id, last_backup_dir, last_timeout_minutes FROM app_state WHERE id = 1"
+            "SELECT last_profile_id, last_backup_dir, last_backup_delay_minutes FROM app_state WHERE id = 1"
         )?;
 
         stmt.query_row([], |row| {
@@ -177,7 +188,7 @@ impl Database {
         timeout: u32,
     ) -> Result<()> {
         self.conn.execute(
-            "UPDATE app_state SET last_profile_id = ?1, last_backup_dir = ?2, last_timeout_minutes = ?3, updated_at = datetime('now') WHERE id = 1",
+            "UPDATE app_state SET last_profile_id = ?1, last_backup_dir = ?2, last_backup_delay_minutes = ?3, updated_at = datetime('now') WHERE id = 1",
             rusqlite::params![profile_id, backup_dir, timeout]
         )?;
         Ok(())
@@ -186,7 +197,7 @@ impl Database {
     /// Obtém um perfil específico por ID
     pub fn get_game_profile(&self, id: i64) -> Result<crate::models::GameProfile> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, template_id, name, save_path, backup_dir, timeout_minutes, exclude_regex, is_active, process_name, created_at 
+            "SELECT id, template_id, name, save_path, backup_dir, backup_delay_minutes, exclude_regex, save_pattern, is_active, process_name, created_at 
              FROM game_profiles WHERE id = ?1"
         )?;
 
@@ -197,11 +208,12 @@ impl Database {
                 name: row.get(2)?,
                 save_path: row.get(3)?,
                 backup_dir: row.get(4)?,
-                timeout_minutes: row.get(5)?,
+                backup_delay_minutes: row.get(5)?,
                 exclude_regex: row.get(6)?,
-                is_active: row.get::<_, i32>(7)? != 0,
-                process_name: row.get(8).ok(),
-                created_at: row.get(9)?,
+                save_pattern: row.get(7)?,
+                is_active: row.get::<_, i32>(8)? != 0,
+                process_name: row.get(9).ok(),
+                created_at: row.get(10)?,
             })
         })
     }

@@ -26,7 +26,7 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         // Atualiza informações do save periodicamente
         self.state.update_save_info();
 
@@ -38,8 +38,18 @@ impl eframe::App for App {
             }
         }
 
+        // Otimização: Repaint adaptativo baseado no estado
+        let repaint_interval = if self.state.active_watcher.is_some() {
+            std::time::Duration::from_secs(1) // Monitorando: 1 FPS para UI responsiva
+        } else {
+            std::time::Duration::from_secs(5) // Parado: 0.2 FPS para economizar CPU
+        };
+        ctx.request_repaint_after(repaint_interval);
+    }
+
+    fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
         // Header unificado: abas (esquerda) + título + status (direita)
-        eframe::egui::TopBottomPanel::top("header").show(ctx, |ui| {
+        eframe::egui::Panel::top("header").show(ui, |ui| {
             ui.horizontal(|ui| {
                 // Abas na esquerda
                 components::render_tab_bar(ui, &mut self.state);
@@ -71,20 +81,12 @@ impl eframe::App for App {
 
         // Banner de mensagens global (condicional)
         if self.state.error_message.is_some() || self.state.success_message.is_some() {
-            eframe::egui::TopBottomPanel::top("messages_banner").show(ctx, |ui| {
+            eframe::egui::Panel::top("messages_banner").show(ui, |ui| {
                 components::render_messages_banner(ui, &mut self.state);
             });
         }
 
         // Renderiza página ativa baseada na aba selecionada
-        pages::render_active_page(ctx, &mut self.state);
-
-        // Otimização: Repaint adaptativo baseado no estado
-        let repaint_interval = if self.state.active_watcher.is_some() {
-            std::time::Duration::from_secs(1) // Monitorando: 1 FPS para UI responsiva
-        } else {
-            std::time::Duration::from_secs(5) // Parado: 0.2 FPS para economizar CPU
-        };
-        ctx.request_repaint_after(repaint_interval);
+        pages::render_active_page(ui, &mut self.state);
     }
 }

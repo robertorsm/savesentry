@@ -3,7 +3,7 @@
 //! polling lento (10s) quando jogo está rodando
 
 use std::time::Duration;
-use sysinfo::{Pid, ProcessRefreshKind, System};
+use sysinfo::{Pid, ProcessesToUpdate, System};
 
 /// Estado do monitoramento de processo
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -45,16 +45,12 @@ impl ProcessMonitor {
             ProcessState::Waiting => {
                 // Fase 1: Busca rápida por novo processo (polling 1s)
                 // Usa refresh mínimo: apenas lista de processos, sem dados extras
-                self.system
-                    .refresh_processes_specifics(ProcessRefreshKind::new());
+                self.system.refresh_processes(ProcessesToUpdate::All, true);
 
                 // Early exit: para assim que encontrar processo
-                if let Some((pid, _)) = self
-                    .system
-                    .processes()
-                    .iter()
-                    .find(|(_, p)| p.name().to_lowercase() == self.target_name_lower)
-                {
+                if let Some((pid, _)) = self.system.processes().iter().find(|(_, p)| {
+                    p.name().to_string_lossy().to_lowercase() == self.target_name_lower
+                }) {
                     self.cached_pid = Some(*pid);
                     self.state = ProcessState::Running;
                     return ProcessState::Running;
@@ -65,7 +61,8 @@ impl ProcessMonitor {
                 // Fase 2: Check ultra-rápido de PID cacheado (polling 10s)
                 if let Some(pid) = self.cached_pid {
                     // Refresh apenas 1 processo (praticamente zero custo)
-                    self.system.refresh_process(pid);
+                    self.system
+                        .refresh_processes(ProcessesToUpdate::Some(&[pid]), false);
 
                     if self.system.process(pid).is_some() {
                         // Processo ainda está rodando

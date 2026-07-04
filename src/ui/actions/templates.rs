@@ -9,6 +9,8 @@ impl AppState {
             self.template_form.selected_for_edit = Some(template_id);
             self.template_form.name = template.name.clone();
             self.template_form.save_dir = template.save_directory.clone();
+            self.template_form.backup_dir = template.backup_dir.clone();
+            self.template_form.backup_delay_minutes = template.backup_delay_minutes;
             self.template_form.process = template.process_name.clone();
             self.template_form.pattern = template.save_pattern.clone();
             self.template_form.exclude = template.exclude_regex.clone().unwrap_or_default();
@@ -27,6 +29,10 @@ impl AppState {
             self.error_message = Some("Diretório de save é obrigatório".to_string());
             return;
         }
+        if self.template_form.backup_dir.trim().is_empty() {
+            self.error_message = Some("Diretório de backup é obrigatório".to_string());
+            return;
+        }
         if self.template_form.process.trim().is_empty() {
             self.error_message = Some("Nome do processo é obrigatório".to_string());
             return;
@@ -38,13 +44,14 @@ impl AppState {
             Some(self.template_form.exclude.clone())
         };
 
-        // Insere no banco
         match self.db.insert_game_template(
             &self.template_form.name,
             &self.template_form.save_dir,
             &self.template_form.process,
             &self.template_form.pattern,
             exclude_regex.as_deref(),
+            &self.template_form.backup_dir,
+            self.template_form.backup_delay_minutes,
         ) {
             Ok(_) => {
                 self.success_message = Some(format!(
@@ -83,11 +90,18 @@ impl AppState {
                 &self.template_form.process,
                 &self.template_form.pattern,
                 exclude_regex.as_deref(),
+                &self.template_form.backup_dir,
+                self.template_form.backup_delay_minutes,
             ) {
                 Ok(_) => {
                     self.success_message =
                         Some(format!("Template '{}' atualizado", self.template_form.name));
                     self.reload_templates();
+
+                    if self.selected_template_id == Some(template_id) {
+                        self.select_template(template_id);
+                    }
+
                     self.clear_template_form();
                 }
                 Err(e) => {

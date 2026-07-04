@@ -11,7 +11,7 @@ pub enum ActiveTab {
 
 /// Configurações da aplicação
 pub struct AppConfig {
-    pub timeout_minutes: u32,
+    pub backup_delay_minutes: u32,
     pub backup_dir: String,
 }
 
@@ -20,6 +20,8 @@ pub struct TemplateForm {
     pub selected_for_edit: Option<i64>,
     pub name: String,
     pub save_dir: String,
+    pub backup_dir: String,
+    pub backup_delay_minutes: u32,
     pub process: String,
     pub pattern: String,
     pub exclude: String,
@@ -47,6 +49,7 @@ pub struct AppState {
 
     // Informações do save atual
     pub current_save_path: String,
+    pub current_save_file: String,
     pub current_save_modified: Option<std::time::SystemTime>,
     last_save_info_update: std::time::Instant,
 
@@ -95,10 +98,11 @@ impl AppState {
             backup_history: Vec::new(),
             backup_history_last_reload: None,
             current_save_path: String::new(),
+            current_save_file: String::new(),
             current_save_modified: None,
             last_save_info_update: std::time::Instant::now(),
             config: AppConfig {
-                timeout_minutes: 5,
+                backup_delay_minutes: 5,
                 backup_dir: String::new(),
             },
             error_message: None,
@@ -108,6 +112,8 @@ impl AppState {
                 selected_for_edit: None,
                 name: String::new(),
                 save_dir: String::new(),
+                backup_dir: String::new(),
+                backup_delay_minutes: 5,
                 process: String::new(),
                 pattern: String::from("*.*"),
                 exclude: String::new(),
@@ -181,7 +187,7 @@ impl AppState {
         }
 
         // Ordena por data (mais recente primeiro)
-        backups.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        backups.sort_by_key(|b| std::cmp::Reverse(b.created_at));
 
         self.backup_history = backups;
         self.backup_history_last_reload = Some(std::time::Instant::now());
@@ -192,9 +198,73 @@ impl AppState {
         self.backup_history_last_reload = None;
     }
 
+    fn find_latest_save(&self) -> Option<(std::path::PathBuf, std::time::SystemTime)> {
+        let save_dir = std::path::Path::new(&self.current_save_path);
+        if !save_dir.is_dir() {
+            #[cfg(debug_assertions)]
+            eprintln!("[find_latest_save] Nao eh diretorio: {:?}", self.current_save_path);
+            return None;
+        }
+
+        let pattern_str = self
+            .active_profile
+            .as_ref()
+            .and_then(|p| p.save_pattern.as_deref())
+            .unwrap_or("*");
+        let pattern = glob::Pattern::new(pattern_str).ok()?;
+        let match_opts = glob::MatchOptions {
+            case_sensitive: cfg!(not(target_os = "windows")),
+            require_literal_separator: false,
+            require_literal_leading_dot: false,
+        };
+
+        #[cfg(debug_assertions)]
+        println!(
+            "[find_latest_save] Escaneando {:?} com padrao '{}'",
+            save_dir, pattern_str
+        );
+
+        let mut latest: Option<(std::path::PathBuf, std::time::SystemTime)> = None;
+        if let Ok(entries) = std::fs::read_dir(save_dir) {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    if metadata.is_file() {
+                        if let Some(name) = entry.file_name().to_str() {
+                            let matched = pattern.matches_with(name, match_opts);
+                            #[cfg(debug_assertions)]
+                            println!(
+                                "[find_latest_save]   {} -> {}",
+                                name,
+                                if matched { "bate" } else { "nao bate" }
+                            );
+                            if matched {
+                                if let Ok(modified) = metadata.modified() {
+                                    if latest
+                                        .as_ref()
+                                        .map_or(true, |(_, t)| modified > *t)
+                                    {
+                                        latest = Some((entry.path(), modified));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        #[cfg(debug_assertions)]
+        if let Some((ref path, _)) = latest {
+            println!("[find_latest_save] Selecionado: {:?}", path);
+        } else {
+            println!("[find_latest_save] Nenhum arquivo bateu no padrao");
+        }
+
+        latest
+    }
+
     /// Atualiza informações do save atual (throttled - máximo a cada 2 segundos)
     pub fn update_save_info(&mut self) {
-        // Throttling: atualiza no máximo a cada 2 segundos para evitar I/O excessivo
         let now = std::time::Instant::now();
         if now.duration_since(self.last_save_info_update) < std::time::Duration::from_secs(2) {
             return;
@@ -205,9 +275,15 @@ impl AppState {
             return;
         }
 
-        let save_path = std::path::Path::new(&self.current_save_path);
-        if let Ok(metadata) = std::fs::metadata(save_path) {
-            self.current_save_modified = metadata.modified().ok();
+        if let Some((path, modified)) = self.find_latest_save() {
+            self.current_save_file = path.to_string_lossy().to_string();
+            self.current_save_modified = Some(modified);
+        } else {
+            self.current_save_file.clear();
+            let save_path = std::path::Path::new(&self.current_save_path);
+            if let Ok(metadata) = std::fs::metadata(save_path) {
+                self.current_save_modified = metadata.modified().ok();
+            }
         }
     }
 
@@ -223,6 +299,8 @@ impl AppState {
         self.template_form.selected_for_edit = None;
         self.template_form.name.clear();
         self.template_form.save_dir.clear();
+        self.template_form.backup_dir.clear();
+        self.template_form.backup_delay_minutes = 5;
         self.template_form.process.clear();
         self.template_form.pattern = String::from("*.*");
         self.template_form.exclude.clear();
@@ -234,27 +312,24 @@ impl AppState {
         self.templates = self.db.list_game_templates().unwrap_or_default();
     }
 
-    /// Restaura último perfil usado ao iniciar aplicação
     fn restore_last_profile(&mut self) {
-        if let Ok((last_profile_id, last_backup_dir, last_timeout)) = self.db.get_app_state() {
-            // Restaura configurações
+        if let Ok((last_profile_id, last_backup_dir, last_backup_delay)) = self.db.get_app_state() {
             if let Some(dir) = last_backup_dir {
                 self.config.backup_dir = dir;
             }
-            self.config.timeout_minutes = last_timeout;
+            self.config.backup_delay_minutes = last_backup_delay;
 
-            // Restaura perfil
             if let Some(profile_id) = last_profile_id {
                 if let Ok(profile) = self.db.get_game_profile(profile_id) {
                     self.active_profile = Some(profile.clone());
                     self.selected_template_id = profile.template_id;
                     self.current_save_path = profile.save_path.clone();
+                    self.current_save_file.clear();
                     self.update_save_info();
 
                     #[cfg(debug_assertions)]
                     println!("📋 Restored last profile: {}", profile.name);
 
-                    // 🚀 Auto-start watcher se tem process_name
                     if profile.process_name.is_some() {
                         match crate::watcher::start_watching(profile) {
                             Ok(handle) => {
@@ -272,8 +347,39 @@ impl AppState {
                             }
                         }
                     }
+                    return;
                 }
             }
         }
+
+        // Se não restaurou perfil, tenta detectar jogo rodando
+        self.try_auto_detect_running_game();
+    }
+
+    fn try_auto_detect_running_game(&mut self) {
+        use sysinfo::{ProcessesToUpdate, System};
+
+        let mut system = System::new();
+        system.refresh_processes(ProcessesToUpdate::All, true);
+
+        let running_processes: Vec<String> = system
+            .processes()
+            .values()
+            .map(|p| p.name().to_string_lossy().to_lowercase())
+            .collect();
+
+        for template in &self.templates {
+            let target = template.process_name.to_lowercase();
+            if running_processes.iter().any(|name| name == &target) {
+                #[cfg(debug_assertions)]
+                println!("🎮 Jogo detectado no startup: {} ({})", template.name, template.process_name);
+
+                self.select_template(template.id);
+                return;
+            }
+        }
+
+        #[cfg(debug_assertions)]
+        println!("🔍 Nenhum jogo detectado no startup");
     }
 }

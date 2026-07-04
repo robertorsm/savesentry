@@ -135,6 +135,38 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                     });
                     ui.end_row();
 
+                    ui.label("Backup em:");
+                    ui.horizontal(|ui| {
+                        let btn_width = 70.0;
+                        let available_width = (ui.available_width() - btn_width).max(80.0);
+                        ui.add_sized(
+                            [available_width, 20.0],
+                            egui::TextEdit::singleline(&mut state.template_form.backup_dir)
+                                .hint_text("%USERPROFILE%\\SaveSentry\\Jogo"),
+                        );
+                        if ui.button("Buscar").clicked() {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .set_title("Selecionar diretório de backup")
+                                .pick_folder()
+                            {
+                                state.template_form.backup_dir = path.display().to_string();
+                            }
+                        }
+                    });
+                    ui.end_row();
+
+                    ui.label("Backup Delay:");
+                    ui.horizontal(|ui| {
+                        ui.add_sized(
+                            [70.0, 20.0],
+                            egui::DragValue::new(&mut state.template_form.backup_delay_minutes)
+                                .speed(0.5)
+                                .range(1..=1440),
+                        );
+                        ui.label("min");
+                    });
+                    ui.end_row();
+
                     ui.label("Processo:");
                     ui.text_edit_singleline(&mut state.template_form.process);
                     ui.end_row();
@@ -154,6 +186,7 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                 if state.template_form.is_new {
                     let can_create = !state.template_form.name.trim().is_empty()
                         && !state.template_form.save_dir.trim().is_empty()
+                        && !state.template_form.backup_dir.trim().is_empty()
                         && !state.template_form.process.trim().is_empty();
 
                     if ui
@@ -201,9 +234,12 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
             ui.group(|ui| {
                 ui.label(egui::RichText::new("Dicas").strong());
                 ui.add_space(2.0);
-                ui.label("• Variáveis: %APPDATA%, %USERPROFILE%, %LOCALAPPDATA%");
+                ui.label("• Windows: %APPDATA%, %LOCALAPPDATA%, %USERPROFILE%, %USERNAME%");
+                ui.label("• Sistema: %PROGRAMFILES%, %PROGRAMFILES(X86)%, %PROGRAMDATA%, %PUBLIC%");
+                ui.label("• Steam: %STEAM_USERDATA%, %STEAMID%");
                 ui.label("• Padrões: *.sav, *.dat, save*.*");
                 ui.label("• Regex exclusão: .*\\.tmp$, .*\\.bak$");
+                ui.label("• Backup Delay: intervalo mínimo entre backups (em minutos)");
             });
         });
 }

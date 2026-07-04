@@ -28,3 +28,6 @@ Thumbs.db
 # Banco de Dados
 *.db
 !resources/savesentry.db
+/dist/
+/.omo/
+/.serena/

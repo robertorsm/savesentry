@@ -1,21 +1,12 @@
-//! Painel de Configurações - Aba Configurações
-//!
-//! Seções:
-//! - Configurações de backup (diretório, timeout)
-//! - Interface (tema, intervalo)
-//! - Informações (versão, descrição)
-
 use crate::ui::state::AppState;
 use eframe::egui;
 
-/// Renderiza o painel de configurações gerais (aba Settings)
 pub fn render_settings_panel(ui: &mut egui::Ui, state: &mut AppState) {
     ui.label(egui::RichText::new("Configurações").heading().strong());
     ui.separator();
     ui.add_space(6.0);
 
     ui.columns(2, |cols| {
-        // Coluna esquerda: Backup
         cols[0].group(|ui| {
             ui.label(egui::RichText::new("Backup").strong().size(15.0));
             ui.add_space(6.0);
@@ -43,27 +34,9 @@ pub fn render_settings_panel(ui: &mut egui::Ui, state: &mut AppState) {
                         }
                     });
                     ui.end_row();
-
-                    ui.label("Intervalo:");
-                    ui.horizontal(|ui| {
-                        if ui
-                            .add_sized(
-                                [70.0, 20.0],
-                                egui::DragValue::new(&mut state.config.timeout_minutes)
-                                    .speed(0.5)
-                                    .range(1..=1440),
-                            )
-                            .changed()
-                        {
-                            state.set_timeout(state.config.timeout_minutes);
-                        }
-                        ui.label("minutos");
-                    });
-                    ui.end_row();
                 });
         });
 
-        // Coluna direita: Interface
         cols[1].group(|ui| {
             ui.label(egui::RichText::new("Interface").strong().size(15.0));
             ui.add_space(6.0);

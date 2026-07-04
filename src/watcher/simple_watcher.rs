@@ -3,9 +3,10 @@ use crate::watcher::file_watcher::FileWatcher;
 use crate::watcher::process_monitor::{ProcessMonitor, ProcessState};
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
+use std::time::SystemTime;
 
 /// Handle para controlar um watcher em background
 pub struct WatcherHandle {
@@ -13,12 +14,31 @@ pub struct WatcherHandle {
     profile_id: i64,
     _handle: thread::JoinHandle<()>,
     _process_monitor_handle: Option<thread::JoinHandle<()>>,
+    last_backup_time: Arc<AtomicU64>,
 }
 
 impl WatcherHandle {
     #[allow(dead_code)]
     pub fn profile_id(&self) -> i64 {
         self.profile_id
+    }
+
+    pub fn remaining_backup_seconds(&self, delay_minutes: u32) -> Option<u64> {
+        let last = self.last_backup_time.load(Ordering::Relaxed);
+        if last == 0 {
+            return None;
+        }
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let elapsed = now.saturating_sub(last);
+        let delay = delay_minutes as u64 * 60;
+        if elapsed >= delay {
+            Some(0)
+        } else {
+            Some(delay - elapsed)
+        }
     }
 }
 
@@ -29,20 +49,18 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
     let _profile_name_for_monitor = _profile_name.clone(); // Clone para usar na segunda closure
     let save_path = PathBuf::from(&profile.save_path);
     let backup_dir = PathBuf::from(&profile.backup_dir);
-    let timeout_minutes = profile.timeout_minutes;
+    let backup_delay_minutes = profile.backup_delay_minutes;
     let exclude_regex = profile.exclude_regex.clone();
+    let save_pattern = profile.save_pattern.clone();
     let process_name = profile.process_name.clone();
-
-    // Verifica se o save path tem um diretório pai para monitorar
-    let watch_dir = save_path
-        .parent()
-        .ok_or("Save path não tem diretório pai")?
-        .to_path_buf();
 
     // Flag compartilhada: indica se deve monitorar arquivo
     // Se process_name existe, começar desabilitado até processo ser detectado
     let should_monitor = Arc::new(AtomicBool::new(process_name.is_none()));
     let should_monitor_clone = Arc::clone(&should_monitor);
+
+    let last_backup_time = Arc::new(AtomicU64::new(0));
+    let last_backup_time_clone = Arc::clone(&last_backup_time);
 
     // Thread de file watching
     let file_watcher_handle = thread::spawn(move || {
@@ -50,8 +68,10 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
         let mut file_watcher = FileWatcher::new(
             save_path.clone(),
             backup_dir,
-            timeout_minutes,
+            backup_delay_minutes,
             exclude_regex,
+            save_pattern,
+            last_backup_time_clone,
         );
 
         // Cria canal para receber eventos do notify
@@ -67,12 +87,11 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
             }
         };
 
-        // Monitora o diretório pai do arquivo de save
-        if let Err(_e) = watcher.watch(&watch_dir, RecursiveMode::NonRecursive) {
+        if let Err(_e) = watcher.watch(&save_path, RecursiveMode::Recursive) {
             #[cfg(debug_assertions)]
             eprintln!(
                 "Erro ao monitorar diretório {:?} para perfil {}: {}",
-                watch_dir, profile_id, _e
+                save_path, profile_id, _e
             );
             return;
         }
@@ -83,46 +102,44 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
             save_path, _profile_name, profile_id
         );
 
-        // Loop de processamento de eventos
         while let Ok(result) = rx.recv() {
-            // Verifica flag: só processa se deve monitorar
             let should_process = should_monitor_clone.load(Ordering::Relaxed);
-
             if !should_process {
-                continue; // Pula processamento enquanto aguarda processo
+                continue;
             }
 
             match result {
                 Ok(Event { paths, .. }) => {
-                    // Verifica se algum dos paths é o arquivo de save
                     for path in paths {
-                        if path == save_path {
-                            // Verifica se deve excluir
-                            if file_watcher.should_exclude(&path) {
-                                continue;
-                            }
+                        if !path.is_file() {
+                            continue;
+                        }
+                        if !file_watcher.matches_pattern(&path) {
+                            continue;
+                        }
+                        if file_watcher.should_exclude(&path) {
+                            continue;
+                        }
 
-                            // Tenta criar backup
-                            if file_watcher.should_backup() {
-                                #[cfg(debug_assertions)]
-                                match file_watcher.create_backup() {
-                                    Ok(backup_path) => {
-                                        println!(
-                                            "✅ Backup criado: {:?} (Perfil: {})",
-                                            backup_path, _profile_name
-                                        );
-                                    }
-                                    Err(e) => {
-                                        eprintln!(
-                                            "❌ Erro ao criar backup para {}: {}",
-                                            _profile_name, e
-                                        );
-                                    }
+                        if file_watcher.should_backup() {
+                            #[cfg(debug_assertions)]
+                            match file_watcher.create_backup(&path) {
+                                Ok(backup_path) => {
+                                    println!(
+                                        "✅ Backup criado: {:?} (Perfil: {})",
+                                        backup_path, _profile_name
+                                    );
                                 }
-
-                                #[cfg(not(debug_assertions))]
-                                let _ = file_watcher.create_backup();
+                                Err(e) => {
+                                    eprintln!(
+                                        "❌ Erro ao criar backup para {}: {}",
+                                        _profile_name, e
+                                    );
+                                }
                             }
+
+                            #[cfg(not(debug_assertions))]
+                            let _ = file_watcher.create_backup(&path);
                         }
                     }
                 }
@@ -190,5 +207,6 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
         profile_id,
         _handle: file_watcher_handle,
         _process_monitor_handle: process_monitor_handle,
+        last_backup_time,
     })
 }

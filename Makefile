@@ -51,20 +51,18 @@ help:
 	@$(PWSH) -Command "$(YELLOW) ''"
 
 #==============================================================================
+# Gerar icone ICO a partir do PNG
+#==============================================================================
+icon:
+	@$(PWSH) -Command "$(CYAN) '=== Gerando Icone ICO ==='"
+	@$(PWSH) -Command "Set-Location 'tools/build-icon'; & 'cargo' run"
+	@$(PWSH) -Command "$(GREEN) 'Icone gerado em assets/icon.ico'"
+
+#==============================================================================
 # Build para Windows (Release otimizado)
 #==============================================================================
-build-windows:
-	@$(PWSH) -Command "$(CYAN) '=== Build Release para Windows ==='"
-	@$(PWSH) -Command "$(YELLOW) 'Compilando com perfil $(RELEASE_PROFILE)...'"
-	$(CARGO) build --profile $(RELEASE_PROFILE)
-	@$(PWSH) -Command "if (Test-Path 'target\$(RELEASE_PROFILE)\$(PROJECT_NAME).exe') { \
-		$$size = [math]::Round((Get-Item 'target\$(RELEASE_PROFILE)\$(PROJECT_NAME).exe').Length / 1MB, 2); \
-		$(GREEN) \"✓ Build concluído com sucesso!\"; \
-		Write-Host \"📦 Executável: target\$(RELEASE_PROFILE)\$(PROJECT_NAME).exe\"; \
-		Write-Host \"📏 Tamanho: $$size MB\"; \
-		if ($$size -lt 6) { $(GREEN) \"✓ Tamanho dentro do limite (< 6 MB)\" } \
-		else { $(RED) \"⚠ Tamanho acima do esperado ($$size MB)\" } \
-	} else { $(RED) '✗ Erro: Executável não foi gerado' }"
+build-windows: icon
+	@$(PWSH) -File "build-windows.ps1" -Profile "$(RELEASE_PROFILE)" -Project "$(PROJECT_NAME)"
 
 #==============================================================================
 # Build para Desenvolvimento (Debug rápido)
@@ -238,9 +236,6 @@ size:
 		$(CYAN) '=== Tamanho do Executável ==='; \
 		Write-Host \"Arquivo: $$($exe.Name)\"; \
 		Write-Host \"Tamanho: $$sizeMB MB ($$sizeKB KB)\"; \
-		Write-Host \"Limite: < 6 MB\"; \
-		if ($$sizeMB -lt 6) { $(GREEN) '✓ Dentro do limite' } \
-		else { $(RED) '✗ Acima do limite' } \
 	} else { $(RED) '✗ Executável não encontrado. Execute: make build-windows' }"
 
 #==============================================================================
