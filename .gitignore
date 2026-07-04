@@ -1,6 +1,5 @@
 # Rust
 /target
-Cargo.lock
 **/*.rs.bk
 *.pdb
 
@@ -31,3 +30,4 @@ Thumbs.db
 /dist/
 /.omo/
 /.serena/
+/.slim/

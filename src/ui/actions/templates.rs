@@ -13,7 +13,7 @@ impl AppState {
             self.template_form.backup_delay_minutes = template.backup_delay_minutes;
             self.template_form.process = template.process_name.clone();
             self.template_form.pattern = template.save_pattern.clone();
-            self.template_form.exclude = template.exclude_regex.clone().unwrap_or_default();
+            self.template_form.exclude = template.exclude_pattern.clone().unwrap_or_default();
             self.template_form.is_new = false;
         }
     }
@@ -38,7 +38,7 @@ impl AppState {
             return;
         }
 
-        let exclude_regex = if self.template_form.exclude.is_empty() {
+        let exclude_pattern = if self.template_form.exclude.is_empty() {
             None
         } else {
             Some(self.template_form.exclude.clone())
@@ -49,7 +49,7 @@ impl AppState {
             &self.template_form.save_dir,
             &self.template_form.process,
             &self.template_form.pattern,
-            exclude_regex.as_deref(),
+            exclude_pattern.as_deref(),
             &self.template_form.backup_dir,
             self.template_form.backup_delay_minutes,
         ) {
@@ -76,7 +76,7 @@ impl AppState {
                 return;
             }
 
-            let exclude_regex = if self.template_form.exclude.is_empty() {
+            let exclude_pattern = if self.template_form.exclude.is_empty() {
                 None
             } else {
                 Some(self.template_form.exclude.clone())
@@ -89,7 +89,7 @@ impl AppState {
                 &self.template_form.save_dir,
                 &self.template_form.process,
                 &self.template_form.pattern,
-                exclude_regex.as_deref(),
+                exclude_pattern.as_deref(),
                 &self.template_form.backup_dir,
                 self.template_form.backup_delay_minutes,
             ) {

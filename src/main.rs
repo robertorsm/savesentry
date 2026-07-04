@@ -8,7 +8,6 @@ fn main() -> anyhow::Result<()> {
         .ok()
         .map(std::sync::Arc::new);
 
-    // Configurações de janela do eframe
     let mut viewport = egui::ViewportBuilder::default()
         .with_inner_size([850.0, 550.0])
         .with_min_inner_size([600.0, 400.0])
@@ -22,7 +21,6 @@ fn main() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    // Executa a aplicação
     eframe::run_native(
         "SaveSentry",
         options,

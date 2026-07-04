@@ -1,20 +1,21 @@
-use serde::{Deserialize, Serialize};
-
 /// Template de jogo pré-configurado
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct GameTemplate {
     pub id: i64,
     pub name: String,
     pub save_directory: String, // Pode conter variáveis como %APPDATA%
     pub process_name: String,   // Nome do processo do jogo
     pub save_pattern: String,   // Padrão de arquivos (ex: *.sav)
-    pub exclude_regex: Option<String>, // Regex para excluir arquivos
+    pub exclude_pattern: Option<String>, // Padrão glob para excluir arquivos (ex: *.tmp)
     pub backup_dir: String,     // Diretório de backup para este template
     pub backup_delay_minutes: u32, // Intervalo mínimo entre backups (em minutos)
     pub version: i32,
     pub is_official: bool, // Template oficial ou customizado
     pub created_at: String,
 }
+
+/// Base constante para conversão AccountID → SteamID64
+pub const STEAMID64_BASE: u64 = 76561197960265728;
 
 impl GameTemplate {
     fn detect_steam_userdata() -> Option<String> {
@@ -42,7 +43,7 @@ impl GameTemplate {
     }
 
     fn steamid64_from_account_id(account_id: u32) -> String {
-        let steam64 = (account_id as u64) + 76561197960265728u64;
+        let steam64 = (account_id as u64) + STEAMID64_BASE;
         steam64.to_string()
     }
 

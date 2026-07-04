@@ -13,7 +13,7 @@ impl AppState {
             // Captura dados do template antes de usar &mut self
             let template_name = t.name.clone();
             let save_dir = t.expand_save_directory();
-            let exclude_regex = t.exclude_regex.clone();
+            let exclude_pattern = t.exclude_pattern.clone();
             let save_pattern = Some(t.save_pattern.clone());
             let process_name = Some(t.process_name.clone());
 
@@ -40,7 +40,7 @@ impl AppState {
                 save_path: save_dir.clone(),
                 backup_dir: game_backup_dir,
                 backup_delay_minutes: t.backup_delay_minutes,
-                exclude_regex,
+                exclude_pattern,
                 save_pattern,
                 is_active: false,
                 template_id: Some(template_id),
@@ -230,18 +230,26 @@ impl AppState {
     }
 }
 
-/// Extrai um arquivo ZIP para o caminho de destino
+/// Extrai todos os arquivos de um ZIP para o diretório de destino
 fn extract_zip(
     zip_path: &std::path::Path,
-    dest_path: &str,
+    dest_dir: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file = std::fs::File::open(zip_path)?;
     let mut archive = zip::ZipArchive::new(file)?;
+    let dest = std::path::Path::new(dest_dir);
 
-    // Extrai o primeiro arquivo do ZIP
-    let mut file = archive.by_index(0)?;
-    let mut outfile = std::fs::File::create(dest_path)?;
-    std::io::copy(&mut file, &mut outfile)?;
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        let outpath = dest.join(file.name());
+
+        if let Some(parent) = outpath.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let mut outfile = std::fs::File::create(&outpath)?;
+        std::io::copy(&mut file, &mut outfile)?;
+    }
 
     Ok(())
 }

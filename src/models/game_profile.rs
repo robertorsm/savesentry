@@ -1,7 +1,5 @@
-use serde::{Deserialize, Serialize};
-
 /// Perfil de um jogo para monitoramento e backup
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct GameProfile {
     pub id: i64,
     pub template_id: Option<i64>, // FK para GameTemplate (se baseado em template)
@@ -9,7 +7,7 @@ pub struct GameProfile {
     pub save_path: String,        // Caminho do arquivo de save
     pub backup_dir: String,       // Diretório onde backups serão salvos
     pub backup_delay_minutes: u32, // Intervalo mínimo entre backups (em minutos)
-    pub exclude_regex: Option<String>, // Regex de exclusão (pode sobrescrever template)
+    pub exclude_pattern: Option<String>, // Padrão glob de exclusão (pode sobrescrever template)
     pub save_pattern: Option<String>,  // Padrão glob de inclusão (ex: *.sav)
     pub is_active: bool,          // Se o monitoramento está ativo
     pub process_name: Option<String>, // Nome do processo para monitoramento (ex: game.exe)
@@ -27,7 +25,7 @@ impl GameProfile {
             save_path,
             backup_dir,
             backup_delay_minutes,
-            exclude_regex: None,
+            exclude_pattern: None,
             save_pattern: None,
             is_active: false,
             process_name: None,
@@ -50,7 +48,7 @@ impl GameProfile {
             save_path: template.expand_save_directory(),
             backup_dir,
             backup_delay_minutes,
-            exclude_regex: template.exclude_regex.clone(),
+            exclude_pattern: template.exclude_pattern.clone(),
             save_pattern: Some(template.save_pattern.clone()),
             is_active: false,
             process_name: Some(template.process_name.clone()),
