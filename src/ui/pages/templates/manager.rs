@@ -63,6 +63,26 @@ pub(super) fn render_templates_list(ui: &mut egui::Ui, state: &mut AppState) {
                                     .size(11.0),
                             );
 
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(format!("v{}", template.version))
+                                        .weak()
+                                        .size(10.0),
+                                );
+                                let dt_str = if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&template.created_at) {
+                                    dt.format("%d/%m/%Y").to_string()
+                                } else if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(&template.created_at, "%Y-%m-%d %H:%M:%S") {
+                                    naive.format("%d/%m/%Y").to_string()
+                                } else {
+                                    template.created_at.clone()
+                                };
+                                ui.label(
+                                    egui::RichText::new(dt_str)
+                                        .weak()
+                                        .size(10.0),
+                                );
+                            });
+
                             ui.add_space(6.0);
 
                             ui.horizontal(|ui| {
@@ -175,7 +195,7 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                     ui.text_edit_singleline(&mut state.template_form.pattern);
                     ui.end_row();
 
-                    ui.label("Exclusão:");
+                    ui.label("Exclusão (glob):");
                     ui.text_edit_singleline(&mut state.template_form.exclude);
                     ui.end_row();
                 });
@@ -238,7 +258,7 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                 ui.label("• Sistema: %PROGRAMFILES%, %PROGRAMFILES(X86)%, %PROGRAMDATA%, %PUBLIC%");
                 ui.label("• Steam: %STEAM_USERDATA%, %STEAMID%");
                 ui.label("• Padrões: *.sav, *.dat, save*.*");
-                ui.label("• Regex exclusão: .*\\.tmp$, .*\\.bak$");
+                ui.label("• Exclusão: *.tmp, *.bak, autosave*");
                 ui.label("• Backup Delay: intervalo mínimo entre backups (em minutos)");
             });
         });

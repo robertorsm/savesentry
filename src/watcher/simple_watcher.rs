@@ -1,10 +1,10 @@
 use crate::models::GameProfile;
 use crate::watcher::file_watcher::FileWatcher;
 use crate::watcher::process_monitor::{ProcessMonitor, ProcessState};
-use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::SystemTime;
 
@@ -15,12 +15,17 @@ pub struct WatcherHandle {
     _handle: thread::JoinHandle<()>,
     _process_monitor_handle: Option<thread::JoinHandle<()>>,
     last_backup_time: Arc<AtomicU64>,
+    pub recent_save: Arc<Mutex<Option<(String, SystemTime)>>>,
 }
 
 impl WatcherHandle {
     #[allow(dead_code)]
     pub fn profile_id(&self) -> i64 {
         self.profile_id
+    }
+
+    pub fn last_backup_time(&self) -> u64 {
+        self.last_backup_time.load(Ordering::Relaxed)
     }
 
     pub fn remaining_backup_seconds(&self, delay_minutes: u32) -> Option<u64> {
@@ -50,7 +55,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
     let save_path = PathBuf::from(&profile.save_path);
     let backup_dir = PathBuf::from(&profile.backup_dir);
     let backup_delay_minutes = profile.backup_delay_minutes;
-    let exclude_regex = profile.exclude_regex.clone();
+    let exclude_pattern = profile.exclude_pattern.clone();
     let save_pattern = profile.save_pattern.clone();
     let process_name = profile.process_name.clone();
 
@@ -62,6 +67,9 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
     let last_backup_time = Arc::new(AtomicU64::new(0));
     let last_backup_time_clone = Arc::clone(&last_backup_time);
 
+    let recent_save = Arc::new(Mutex::new(None));
+    let recent_save_clone = Arc::clone(&recent_save);
+
     // Thread de file watching
     let file_watcher_handle = thread::spawn(move || {
         // Cria o FileWatcher
@@ -69,7 +77,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
             save_path.clone(),
             backup_dir,
             backup_delay_minutes,
-            exclude_regex,
+            exclude_pattern,
             save_pattern,
             last_backup_time_clone,
         );
@@ -87,7 +95,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
             }
         };
 
-        if let Err(_e) = watcher.watch(&save_path, RecursiveMode::Recursive) {
+        if let Err(_e) = watcher.watch(&save_path, RecursiveMode::NonRecursive) {
             #[cfg(debug_assertions)]
             eprintln!(
                 "Erro ao monitorar diretório {:?} para perfil {}: {}",
@@ -102,6 +110,8 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
             save_path, _profile_name, profile_id
         );
 
+        let mut pending_backup = false;
+
         while let Ok(result) = rx.recv() {
             let should_process = should_monitor_clone.load(Ordering::Relaxed);
             if !should_process {
@@ -109,7 +119,13 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
             }
 
             match result {
-                Ok(Event { paths, .. }) => {
+                Ok(Event { kind, paths, .. }) => {
+                    match kind {
+                        EventKind::Create(_) | EventKind::Modify(_) => {}
+                        _ => continue,
+                    }
+
+                    let mut has_relevant_event = false;
                     for path in paths {
                         if !path.is_file() {
                             continue;
@@ -120,10 +136,22 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                         if file_watcher.should_exclude(&path) {
                             continue;
                         }
+                        has_relevant_event = true;
 
+                        if let Ok(metadata) = std::fs::metadata(&path) {
+                            if let Ok(modified) = metadata.modified() {
+                                let mut recent = recent_save_clone.lock().unwrap();
+                                *recent = Some((path.to_string_lossy().to_string(), modified));
+                            }
+                        }
+                    }
+
+                    if has_relevant_event {
+                        thread::sleep(std::time::Duration::from_millis(100));
                         if file_watcher.should_backup() {
+                            pending_backup = false;
                             #[cfg(debug_assertions)]
-                            match file_watcher.create_backup(&path) {
+                            match file_watcher.create_backup(&save_path) {
                                 Ok(backup_path) => {
                                     println!(
                                         "✅ Backup criado: {:?} (Perfil: {})",
@@ -139,8 +167,30 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                             }
 
                             #[cfg(not(debug_assertions))]
-                            let _ = file_watcher.create_backup(&path);
+                            let _ = file_watcher.create_backup(&save_path);
+                        } else {
+                            pending_backup = true;
                         }
+                    } else if pending_backup && file_watcher.should_backup() {
+                        pending_backup = false;
+                        #[cfg(debug_assertions)]
+                        match file_watcher.create_backup(&save_path) {
+                            Ok(backup_path) => {
+                                println!(
+                                    "✅ Backup criado (pendente): {:?} (Perfil: {})",
+                                    backup_path, _profile_name
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "❌ Erro ao criar backup para {}: {}",
+                                    _profile_name, e
+                                );
+                            }
+                        }
+
+                        #[cfg(not(debug_assertions))]
+                        let _ = file_watcher.create_backup(&save_path);
                     }
                 }
                 Err(_e) => {
@@ -208,5 +258,6 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
         _handle: file_watcher_handle,
         _process_monitor_handle: process_monitor_handle,
         last_backup_time,
+        recent_save,
     })
 }

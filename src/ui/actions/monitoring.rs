@@ -13,7 +13,7 @@ impl AppState {
             // Captura dados do template antes de usar &mut self
             let template_name = t.name.clone();
             let save_dir = t.expand_save_directory();
-            let exclude_regex = t.exclude_regex.clone();
+            let exclude_pattern = t.exclude_pattern.clone();
             let save_pattern = Some(t.save_pattern.clone());
             let process_name = Some(t.process_name.clone());
 
@@ -40,7 +40,7 @@ impl AppState {
                 save_path: save_dir.clone(),
                 backup_dir: game_backup_dir,
                 backup_delay_minutes: t.backup_delay_minutes,
-                exclude_regex,
+                exclude_pattern,
                 save_pattern,
                 is_active: false,
                 template_id: Some(template_id),
@@ -81,22 +81,26 @@ impl AppState {
 
             self.success_message = Some(format!("Template '{}' selecionado", template_name));
 
-            // 🚀 Auto-start watcher se tem process_name (aguardando processo)
-            if profile.process_name.is_some() {
-                match crate::watcher::start_watching(profile) {
-                    Ok(handle) => {
-                        self.active_watcher = Some(handle);
-
-                        #[cfg(debug_assertions)]
-                        println!(
-                            "🚀 Auto-started watcher for {} (awaiting process)",
-                            template_name
-                        );
+            if let Some(ref proc_name) = profile.process_name {
+                if is_process_running(proc_name) {
+                    match crate::watcher::start_watching(profile) {
+                        Ok(handle) => {
+                            self.active_watcher = Some(handle);
+                            self.success_message = Some(format!(
+                                "Template '{}' selecionado — monitoramento ativo",
+                                template_name
+                            ));
+                        }
+                        Err(_e) => {
+                            #[cfg(debug_assertions)]
+                            eprintln!("❌ Failed to auto-start: {}", _e);
+                        }
                     }
-                    Err(_e) => {
-                        #[cfg(debug_assertions)]
-                        eprintln!("❌ Failed to auto-start: {}", _e);
-                    }
+                } else {
+                    self.success_message = Some(format!(
+                        "Template '{}' selecionado — aguardando '{}'",
+                        template_name, proc_name
+                    ));
                 }
             }
         } else {
@@ -230,18 +234,37 @@ impl AppState {
     }
 }
 
-/// Extrai um arquivo ZIP para o caminho de destino
+fn is_process_running(name: &str) -> bool {
+    use sysinfo::{ProcessesToUpdate, System};
+    let mut system = System::new();
+    system.refresh_processes(ProcessesToUpdate::All, true);
+    let target = name.to_lowercase();
+    system
+        .processes()
+        .values()
+        .any(|p| p.name().to_string_lossy().to_lowercase() == target)
+}
+
+/// Extrai todos os arquivos de um ZIP para o diretório de destino
 fn extract_zip(
     zip_path: &std::path::Path,
-    dest_path: &str,
+    dest_dir: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file = std::fs::File::open(zip_path)?;
     let mut archive = zip::ZipArchive::new(file)?;
+    let dest = std::path::Path::new(dest_dir);
 
-    // Extrai o primeiro arquivo do ZIP
-    let mut file = archive.by_index(0)?;
-    let mut outfile = std::fs::File::create(dest_path)?;
-    std::io::copy(&mut file, &mut outfile)?;
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        let outpath = dest.join(file.name());
+
+        if let Some(parent) = outpath.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let mut outfile = std::fs::File::create(&outpath)?;
+        std::io::copy(&mut file, &mut outfile)?;
+    }
 
     Ok(())
 }

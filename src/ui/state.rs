@@ -26,6 +26,12 @@ pub struct TemplateForm {
     pub pattern: String,
     pub exclude: String,
     pub is_new: bool,
+    pub original_save_dir: String,
+    pub original_backup_dir: String,
+    pub original_process: String,
+    pub original_pattern: String,
+    pub original_exclude: String,
+    pub original_backup_delay_minutes: u32,
 }
 
 /// Estado da aplicação (single profile com auto-restore do último usado)
@@ -68,6 +74,9 @@ pub struct AppState {
 
     // Timer não-bloqueante para reinício de monitoramento após restore
     pub restart_monitoring_after: Option<std::time::Instant>,
+
+    // Rastreia o último backup já refletido na UI para atualização automática
+    last_seen_backup_time: u64,
 }
 
 /// Entrada no histórico de backups
@@ -118,8 +127,15 @@ impl AppState {
                 pattern: String::from("*.*"),
                 exclude: String::new(),
                 is_new: true,
+                original_save_dir: String::new(),
+                original_backup_dir: String::new(),
+                original_process: String::new(),
+                original_pattern: String::new(),
+                original_exclude: String::new(),
+                original_backup_delay_minutes: 5,
             },
             restart_monitoring_after: None,
+            last_seen_backup_time: 0,
         };
 
         // 🚀 Auto-restore último perfil usado
@@ -275,6 +291,17 @@ impl AppState {
             return;
         }
 
+        // Event-driven: usa informação do watcher se disponível
+        if let Some(ref watcher) = self.active_watcher {
+            let recent = watcher.recent_save.lock().unwrap();
+            if let Some((path, modified)) = recent.as_ref() {
+                self.current_save_file = path.clone();
+                self.current_save_modified = Some(*modified);
+                return;
+            }
+        }
+
+        // Fallback: escaneamento do diretório quando watcher não está ativo
         if let Some((path, modified)) = self.find_latest_save() {
             self.current_save_file = path.to_string_lossy().to_string();
             self.current_save_modified = Some(modified);
@@ -285,6 +312,21 @@ impl AppState {
                 self.current_save_modified = metadata.modified().ok();
             }
         }
+    }
+
+    /// Verifica se um novo backup foi criado pelo watcher e recarrega o histórico
+    /// Retorna true se o histórico foi atualizado
+    pub fn check_backup_updates(&mut self) -> bool {
+        if let Some(ref watcher) = self.active_watcher {
+            let last_backup = watcher.last_backup_time();
+            if last_backup > 0 && last_backup != self.last_seen_backup_time {
+                self.last_seen_backup_time = last_backup;
+                self.invalidate_backup_cache();
+                self.reload_backup_history();
+                return true;
+            }
+        }
+        false
     }
 
     /// Limpa mensagens de erro/sucesso
@@ -305,6 +347,12 @@ impl AppState {
         self.template_form.pattern = String::from("*.*");
         self.template_form.exclude.clear();
         self.template_form.is_new = true;
+        self.template_form.original_save_dir.clear();
+        self.template_form.original_backup_dir.clear();
+        self.template_form.original_process.clear();
+        self.template_form.original_pattern.clear();
+        self.template_form.original_exclude.clear();
+        self.template_form.original_backup_delay_minutes = 5;
     }
 
     /// Recarrega lista de templates do banco

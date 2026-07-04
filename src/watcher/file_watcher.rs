@@ -13,7 +13,7 @@ pub struct FileWatcher {
     backup_dir: PathBuf,
     backup_delay_minutes: u32,
     last_backup: Option<SystemTime>,
-    exclude_regex: Option<regex::Regex>,
+    exclude_pattern: Option<glob::Pattern>,
     save_pattern: Option<glob::Pattern>,
     last_backup_time: Arc<AtomicU64>,
 }
@@ -23,11 +23,11 @@ impl FileWatcher {
         save_path: PathBuf,
         backup_dir: PathBuf,
         backup_delay_minutes: u32,
-        exclude_regex_str: Option<String>,
+        exclude_pattern_str: Option<String>,
         save_pattern_str: Option<String>,
         last_backup_time: Arc<AtomicU64>,
     ) -> Self {
-        let exclude_regex = exclude_regex_str.and_then(|s| regex::Regex::new(&s).ok());
+        let exclude_pattern = exclude_pattern_str.and_then(|s| glob::Pattern::new(&s).ok());
         let save_pattern = save_pattern_str.and_then(|s| glob::Pattern::new(&s).ok());
 
         Self {
@@ -35,7 +35,7 @@ impl FileWatcher {
             backup_dir,
             backup_delay_minutes,
             last_backup: None,
-            exclude_regex,
+            exclude_pattern,
             save_pattern,
             last_backup_time,
         }
@@ -43,9 +43,14 @@ impl FileWatcher {
 
     /// Verifica se um arquivo deve ser excluído do backup
     pub fn should_exclude(&self, path: &std::path::Path) -> bool {
-        if let Some(regex) = &self.exclude_regex {
+        if let Some(pattern) = &self.exclude_pattern {
             if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                return regex.is_match(file_name);
+                let opts = glob::MatchOptions {
+                    case_sensitive: cfg!(not(target_os = "windows")),
+                    require_literal_separator: false,
+                    require_literal_leading_dot: false,
+                };
+                return pattern.matches_with(file_name, opts);
             }
         }
         false
@@ -97,7 +102,7 @@ impl FileWatcher {
         let file = fs::File::create(&backup_path)?;
         let mut zip = zip::ZipWriter::new(file);
 
-        let options = zip::write::FileOptions::<()>::default()
+        let options = zip::write::FileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
 
         let save_dir = std::path::Path::new(&self.save_path);

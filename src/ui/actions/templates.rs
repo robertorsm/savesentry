@@ -13,8 +13,14 @@ impl AppState {
             self.template_form.backup_delay_minutes = template.backup_delay_minutes;
             self.template_form.process = template.process_name.clone();
             self.template_form.pattern = template.save_pattern.clone();
-            self.template_form.exclude = template.exclude_regex.clone().unwrap_or_default();
+            self.template_form.exclude = template.exclude_pattern.clone().unwrap_or_default();
             self.template_form.is_new = false;
+            self.template_form.original_save_dir = template.save_directory.clone();
+            self.template_form.original_backup_dir = template.backup_dir.clone();
+            self.template_form.original_backup_delay_minutes = template.backup_delay_minutes;
+            self.template_form.original_process = template.process_name.clone();
+            self.template_form.original_pattern = template.save_pattern.clone();
+            self.template_form.original_exclude = template.exclude_pattern.clone().unwrap_or_default();
         }
     }
 
@@ -38,7 +44,7 @@ impl AppState {
             return;
         }
 
-        let exclude_regex = if self.template_form.exclude.is_empty() {
+        let exclude_pattern = if self.template_form.exclude.is_empty() {
             None
         } else {
             Some(self.template_form.exclude.clone())
@@ -49,7 +55,7 @@ impl AppState {
             &self.template_form.save_dir,
             &self.template_form.process,
             &self.template_form.pattern,
-            exclude_regex.as_deref(),
+            exclude_pattern.as_deref(),
             &self.template_form.backup_dir,
             self.template_form.backup_delay_minutes,
         ) {
@@ -70,26 +76,33 @@ impl AppState {
     /// Atualiza um template existente
     pub fn update_template(&mut self) {
         if let Some(template_id) = self.template_form.selected_for_edit {
-            // Validação
             if self.template_form.name.trim().is_empty() {
                 self.error_message = Some("Nome do template é obrigatório".to_string());
                 return;
             }
 
-            let exclude_regex = if self.template_form.exclude.is_empty() {
+            let exclude_pattern = if self.template_form.exclude.is_empty() {
                 None
             } else {
                 Some(self.template_form.exclude.clone())
             };
 
-            // Atualiza no banco
+            let needs_watcher_restart =
+                self.template_form.save_dir != self.template_form.original_save_dir
+                    || self.template_form.backup_dir != self.template_form.original_backup_dir
+                    || self.template_form.process != self.template_form.original_process
+                    || self.template_form.pattern != self.template_form.original_pattern
+                    || self.template_form.exclude != self.template_form.original_exclude
+                    || self.template_form.backup_delay_minutes
+                        != self.template_form.original_backup_delay_minutes;
+
             match self.db.update_game_template(
                 template_id,
                 &self.template_form.name,
                 &self.template_form.save_dir,
                 &self.template_form.process,
                 &self.template_form.pattern,
-                exclude_regex.as_deref(),
+                exclude_pattern.as_deref(),
                 &self.template_form.backup_dir,
                 self.template_form.backup_delay_minutes,
             ) {
@@ -99,7 +112,11 @@ impl AppState {
                     self.reload_templates();
 
                     if self.selected_template_id == Some(template_id) {
-                        self.select_template(template_id);
+                        if needs_watcher_restart {
+                            self.select_template(template_id);
+                        } else if let Some(ref mut profile) = self.active_profile {
+                            profile.name = self.template_form.name.clone();
+                        }
                     }
 
                     self.clear_template_form();

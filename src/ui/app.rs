@@ -27,24 +27,25 @@ impl App {
 
 impl eframe::App for App {
     fn logic(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
-        // Atualiza informações do save periodicamente
         self.state.update_save_info();
 
-        // Verifica timer não-bloqueante para reinício de monitoramento após restore
+        if self.state.check_backup_updates() {
+            ctx.request_repaint();
+        }
+
         if let Some(instant) = self.state.restart_monitoring_after {
             if instant <= std::time::Instant::now() {
                 self.state.restart_monitoring_after = None;
                 self.state.start_monitoring();
+                ctx.request_repaint();
+            } else {
+                ctx.request_repaint_after(std::time::Duration::from_secs(1));
             }
         }
 
-        // Otimização: Repaint adaptativo baseado no estado
-        let repaint_interval = if self.state.active_watcher.is_some() {
-            std::time::Duration::from_secs(1) // Monitorando: 1 FPS para UI responsiva
-        } else {
-            std::time::Duration::from_secs(5) // Parado: 0.2 FPS para economizar CPU
-        };
-        ctx.request_repaint_after(repaint_interval);
+        if self.state.error_message.is_some() || self.state.success_message.is_some() {
+            ctx.request_repaint();
+        }
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
