@@ -1,6 +1,39 @@
 [package]
-name = "SaveGameWatcher"
+name = "SaveSentry"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+eframe = { version = "0.35.0", default-features = false, features = ["default_fonts", "glow"] }
+egui = "0.35.0"
+rusqlite = { version = "0.39.0", features = ["bundled"] }
+serde = { version = "1.0.228", features = ["derive"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+anyhow = "1.0.103"
+notify = "9.0.0-rc.4"
+rfd = "0.17.2"
+zip = { version = "9.0.0-pre2", default-features = false, features = ["deflate"] }
+refinery = { version = "0.9.2", features = ["rusqlite"] }
+regex = "1.12.4"
+glob = "0.3"
+sysinfo = { version = "0.39.5", default-features = false, features = ["system"] }
+
+[build-dependencies]
+refinery = { version = "0.9.2", features = ["rusqlite"] }
+winresource = "0.1"
+
+[profile.dev]
+strip = "debuginfo"    # Remove símbolos de debug do build dev (reduz .pdb em ~60%)
+
+[profile.release-windows]
+opt-level = "z"        # Otimizar para tamanho mínimo (reduz footprint)
+lto = "fat"            # Link Time Optimization máximo
+codegen-units = 1      # Melhor otimização cross-function
+strip = true           # Remover símbolos de debug
+panic = "abort"        # Reduzir código de unwinding
+incremental = false    # Desabilitar compilação incremental
+overflow-checks = false # Desabilitar checks de overflow em release
+debug = false          # Sem informações de debug
+debug-assertions = false # Desabilitar assertions de debug
+rpath = false          # Não incluir rpath (não necessário para Windows)
+inherits = "release"   # Herdar configurações base do perfil release

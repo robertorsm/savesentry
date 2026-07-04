@@ -24,3 +24,10 @@ Thumbs.db
 *.swo
 *~
 .#*
+
+# Banco de Dados
+*.db
+!resources/savesentry.db
+/dist/
+/.omo/
+/.serena/
