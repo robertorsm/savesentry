@@ -32,6 +32,8 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                         ui.style().visuals.widgets.inactive.weak_bg_fill
                     };
 
+                    let mut button_rect: Option<egui::Rect> = None;
+
                     let response = egui::Frame::group(ui.style())
                         .inner_margin(6.0)
                         .fill(frame_color)
@@ -68,18 +70,29 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                                 .fill(egui::Color32::from_rgb(60, 100, 140))
                                 .min_size(egui::vec2(ui.available_width(), 22.0));
 
-                            if ui
+                            let btn = ui
                                 .add(restore_button)
-                                .on_hover_text("Restaurar este backup")
-                                .clicked()
-                            {
+                                .on_hover_text("Restaurar este backup");
+                            if btn.clicked() {
                                 clicked_restore = Some(backup.filename.clone());
                             }
+                            button_rect = Some(btn.rect);
                         })
                         .response;
 
-                    let clickable = response.interact(egui::Sense::click());
-                    if clickable.clicked() && clicked_restore.is_none() {
+                    let frame_clicked = ui.input(|i| {
+                        let pointer = &i.pointer;
+                        if let Some(pos) = pointer.interact_pos() {
+                            if pointer.primary_clicked() && response.rect.contains(pos) {
+                                let on_button =
+                                    button_rect.is_some_and(|r| r.contains(pos));
+                                return !on_button;
+                            }
+                        }
+                        false
+                    });
+
+                    if frame_clicked && clicked_restore.is_none() {
                         state.selected_backup_filename = Some(backup.filename.clone());
                     }
 
