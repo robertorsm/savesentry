@@ -27,14 +27,19 @@ impl App {
 
 impl eframe::App for App {
     fn logic(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
-        self.state.update_save_info();
+        let now = std::time::Instant::now();
 
-        if self.state.check_backup_updates() {
-            ctx.request_repaint();
+        if self.state.last_ui_update.elapsed() >= std::time::Duration::from_millis(500) {
+            self.state.last_ui_update = now;
+            self.state.update_save_info();
+
+            if self.state.check_backup_updates() {
+                ctx.request_repaint();
+            }
         }
 
         if let Some(instant) = self.state.restart_monitoring_after {
-            if instant <= std::time::Instant::now() {
+            if instant <= now {
                 self.state.restart_monitoring_after = None;
                 self.state.start_monitoring();
                 ctx.request_repaint();
@@ -43,8 +48,8 @@ impl eframe::App for App {
             }
         }
 
-        if self.state.error_message.is_some() || self.state.success_message.is_some() {
-            ctx.request_repaint();
+        if self.state.active_watcher.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_secs(1));
         }
     }
 

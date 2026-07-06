@@ -75,11 +75,13 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
         // Cria o FileWatcher
         let mut file_watcher = FileWatcher::new(
             save_path.clone(),
-            backup_dir,
+            backup_dir.clone(),
             backup_delay_minutes,
             exclude_pattern,
             save_pattern,
             last_backup_time_clone,
+            profile.backup_max_count,
+            profile.backup_recursive,
         );
 
         // Cria canal para receber eventos do notify
@@ -110,93 +112,125 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
             save_path, _profile_name, profile_id
         );
 
-        let mut pending_backup = false;
+        let debounce_duration = std::time::Duration::from_secs(3);
+        let mut deadline: Option<std::time::Instant> = None;
+        let mut last_backup_path: Option<std::path::PathBuf> = None;
 
-        while let Ok(result) = rx.recv() {
+        loop {
             let should_process = should_monitor_clone.load(Ordering::Relaxed);
-            if !should_process {
-                continue;
-            }
 
-            match result {
-                Ok(Event { kind, paths, .. }) => {
-                    match kind {
-                        EventKind::Create(_) | EventKind::Modify(_) => {}
-                        _ => continue,
-                    }
-
-                    let mut has_relevant_event = false;
-                    for path in paths {
-                        if !path.is_file() {
-                            continue;
-                        }
-                        if !file_watcher.matches_pattern(&path) {
-                            continue;
-                        }
-                        if file_watcher.should_exclude(&path) {
-                            continue;
-                        }
-                        has_relevant_event = true;
-
-                        if let Ok(metadata) = std::fs::metadata(&path) {
-                            if let Ok(modified) = metadata.modified() {
-                                let mut recent = recent_save_clone.lock().unwrap();
-                                *recent = Some((path.to_string_lossy().to_string(), modified));
-                            }
-                        }
-                    }
-
-                    if has_relevant_event {
-                        thread::sleep(std::time::Duration::from_millis(100));
-                        if file_watcher.should_backup() {
-                            pending_backup = false;
-                            #[cfg(debug_assertions)]
-                            match file_watcher.create_backup(&save_path) {
-                                Ok(backup_path) => {
-                                    println!(
-                                        "✅ Backup criado: {:?} (Perfil: {})",
-                                        backup_path, _profile_name
-                                    );
-                                }
-                                Err(e) => {
-                                    eprintln!(
-                                        "❌ Erro ao criar backup para {}: {}",
-                                        _profile_name, e
-                                    );
-                                }
-                            }
-
-                            #[cfg(not(debug_assertions))]
-                            let _ = file_watcher.create_backup(&save_path);
-                        } else {
-                            pending_backup = true;
-                        }
-                    } else if pending_backup && file_watcher.should_backup() {
-                        pending_backup = false;
+            let recv_result = if let Some(d) = deadline {
+                let now = std::time::Instant::now();
+                if d <= now {
+                    // Deadline expirou: dispara backup
+                    if should_process && file_watcher.should_backup() {
                         #[cfg(debug_assertions)]
                         match file_watcher.create_backup(&save_path) {
                             Ok(backup_path) => {
                                 println!(
-                                    "✅ Backup criado (pendente): {:?} (Perfil: {})",
+                                    "✅ Backup criado: {:?} (Perfil: {})",
                                     backup_path, _profile_name
                                 );
+                                last_backup_path = Some(backup_path);
                             }
                             Err(e) => {
-                                eprintln!(
-                                    "❌ Erro ao criar backup para {}: {}",
-                                    _profile_name, e
-                                );
+                                eprintln!("❌ Erro ao criar backup para {}: {}", _profile_name, e);
                             }
                         }
 
                         #[cfg(not(debug_assertions))]
-                        let _ = file_watcher.create_backup(&save_path);
+                        if let Ok(backup_path) = file_watcher.create_backup(&save_path) {
+                            last_backup_path = Some(backup_path);
+                        }
+                    }
+                    deadline = None;
+                    continue;
+                }
+                let timeout = d.duration_since(now);
+                rx.recv_timeout(timeout)
+            } else {
+                rx.recv()
+                    .map_err(|_| std::sync::mpsc::RecvTimeoutError::Disconnected)
+            };
+
+            match recv_result {
+                Ok(result) => {
+                    if !should_process {
+                        continue;
+                    }
+
+                    match result {
+                        Ok(Event { kind, paths, .. }) => {
+                            match kind {
+                                EventKind::Create(_) | EventKind::Modify(_) => {}
+                                _ => continue,
+                            }
+
+                            let mut has_relevant_event = false;
+                            for path in paths {
+                                if !path.is_file() {
+                                    continue;
+                                }
+                                if !file_watcher.matches_pattern(&path) {
+                                    continue;
+                                }
+                                if file_watcher.should_exclude(&path) {
+                                    continue;
+                                }
+                                has_relevant_event = true;
+
+                                if let Ok(metadata) = std::fs::metadata(&path) {
+                                    if let Ok(modified) = metadata.modified() {
+                                        let mut recent = recent_save_clone.lock().unwrap();
+                                        *recent =
+                                            Some((path.to_string_lossy().to_string(), modified));
+                                    }
+                                }
+                            }
+
+                            if has_relevant_event {
+                                // Reseta deadline (sliding debounce)
+                                deadline = Some(std::time::Instant::now() + debounce_duration);
+                            }
+                        }
+                        Err(_e) => {
+                            #[cfg(debug_assertions)]
+                            eprintln!("Erro no watcher do perfil {}: {}", profile_id, _e);
+                        }
                     }
                 }
-                Err(_e) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!("Erro no watcher do perfil {}: {}", profile_id, _e);
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    // Timeout expirou sem eventos: dispara backup
+                    if should_process && file_watcher.should_backup() {
+                        #[cfg(debug_assertions)]
+                        match file_watcher.create_backup(&save_path) {
+                            Ok(backup_path) => {
+                                println!(
+                                    "✅ Backup criado (debounce): {:?} (Perfil: {})",
+                                    backup_path, _profile_name
+                                );
+                                last_backup_path = Some(backup_path);
+                            }
+                            Err(e) => {
+                                eprintln!("❌ Erro ao criar backup para {}: {}", _profile_name, e);
+                            }
+                        }
+
+                        #[cfg(not(debug_assertions))]
+                        if let Ok(backup_path) = file_watcher.create_backup(&save_path) {
+                            last_backup_path = Some(backup_path);
+                        }
+                    }
+                    deadline = None;
                 }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    break;
+                }
+            }
+
+            // Tenta capturar screenshot após backup (não bloqueante)
+            if let Some(ref path) = last_backup_path {
+                let _ = crate::watcher::file_watcher::capture_screenshot(path);
             }
         }
 

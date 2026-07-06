@@ -1,4 +1,4 @@
-mod file_watcher;
+pub mod file_watcher;
 mod process_monitor;
 mod simple_watcher;
 

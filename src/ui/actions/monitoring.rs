@@ -13,9 +13,19 @@ impl AppState {
             // Captura dados do template antes de usar &mut self
             let template_name = t.name.clone();
             let save_dir = t.expand_save_directory();
-            let exclude_pattern = t.exclude_pattern.clone();
             let save_pattern = Some(t.save_pattern.clone());
             let process_name = Some(t.process_name.clone());
+
+            // P3: Merge de exclusões: template default + user custom
+            let exclude_pattern = match (&t.default_exclude_pattern, &t.exclude_pattern) {
+                (Some(default), Some(user)) => {
+                    let merged = format!("{}|{}", default, user);
+                    Some(merged)
+                }
+                (Some(default), None) => Some(default.clone()),
+                (None, Some(user)) => Some(user.clone()),
+                (None, None) => None,
+            };
 
             // 🔄 NOVO: Para watcher anterior se estiver ativo (troca de perfil)
             if self.active_watcher.is_some() {
@@ -46,6 +56,8 @@ impl AppState {
                 template_id: Some(template_id),
                 process_name,
                 created_at: chrono::Local::now().to_rfc3339(),
+                backup_max_count: 50,
+                backup_recursive: false,
             };
 
             if !profile.backup_dir.is_empty() {
@@ -130,7 +142,8 @@ impl AppState {
         // Pega o perfil ativo
         if let Some(profile) = &mut self.active_profile {
             if profile.backup_dir.is_empty() {
-                self.error_message = Some("Configure o diretório de backup no template".to_string());
+                self.error_message =
+                    Some("Configure o diretório de backup no template".to_string());
                 return;
             }
 
@@ -214,6 +227,11 @@ impl AppState {
             self.stop_monitoring();
         }
 
+        if let Err(_e) = self.create_safety_backup() {
+            #[cfg(debug_assertions)]
+            eprintln!("⚠️ Falha ao criar safety backup: {}", _e);
+        }
+
         // Extrai o ZIP
         match extract_zip(&backup_path, &self.current_save_path) {
             Ok(_) => {
@@ -231,6 +249,61 @@ impl AppState {
                 self.error_message = Some(format!("Erro ao restaurar: {}", e));
             }
         }
+    }
+
+    /// Cria um safety backup (BeforeRestore) do estado atual do save
+    fn create_safety_backup(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let save_path = std::path::Path::new(&self.current_save_path);
+        if !save_path.exists() {
+            return Err("Diretório de save não existe".into());
+        }
+
+        let backup_dir = if let Some(ref profile) = self.active_profile {
+            std::path::Path::new(&profile.backup_dir)
+        } else {
+            return Err("Nenhum perfil ativo".into());
+        };
+
+        let now = chrono::Local::now();
+        let timestamp = now.format("%d-%m-%Y_%H-%M-%S").to_string();
+        let safety_name = format!("BeforeRestore_{}", timestamp);
+
+        if let Ok(entries) = std::fs::read_dir(backup_dir) {
+            for entry in entries.flatten() {
+                if let Some(name) = entry.file_name().to_str() {
+                    if name.starts_with("BeforeRestore_") && name.ends_with(".zip") {
+                        let _ = std::fs::remove_file(entry.path());
+                    }
+                }
+            }
+        }
+
+        let exclude_pattern = self
+            .active_profile
+            .as_ref()
+            .and_then(|p| p.exclude_pattern.as_ref())
+            .and_then(|s| glob::Pattern::new(s).ok());
+        let save_pattern = self
+            .active_profile
+            .as_ref()
+            .and_then(|p| p.save_pattern.as_ref())
+            .and_then(|s| glob::Pattern::new(s).ok());
+
+        crate::watcher::file_watcher::FileWatcher::create_backup_from_dir(
+            save_path,
+            backup_dir,
+            exclude_pattern.as_ref(),
+            save_pattern.as_ref(),
+            Some(&safety_name),
+            50,
+            false,
+        )?;
+
+        self.success_message = Some(format!("Safety backup '{}' criado", safety_name));
+        self.invalidate_backup_cache();
+        self.reload_backup_history();
+
+        Ok(())
     }
 }
 

@@ -17,13 +17,24 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
         ui.add_space(8.0);
     } else {
         let mut clicked_restore: Option<String> = None;
+        let backup_dir = std::path::Path::new(&state.config.backup_dir);
 
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 for backup in &state.backup_history {
-                    egui::Frame::group(ui.style())
+                    let is_selected =
+                        state.selected_backup_filename.as_ref() == Some(&backup.filename);
+
+                    let frame_color = if is_selected {
+                        egui::Color32::from_rgb(40, 80, 120)
+                    } else {
+                        ui.style().visuals.widgets.inactive.weak_bg_fill
+                    };
+
+                    let response = egui::Frame::group(ui.style())
                         .inner_margin(6.0)
+                        .fill(frame_color)
                         .show(ui, |ui| {
                             ui.set_min_width(ui.available_width());
 
@@ -44,6 +55,13 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                                     .size(11.0),
                             );
 
+                            let screenshot_path =
+                                backup_dir.join(&backup.filename).with_extension("png");
+                            if screenshot_path.exists() {
+                                ui.add_space(2.0);
+                                ui.label(egui::RichText::new("📷 Screenshot").weak().size(10.0));
+                            }
+
                             ui.add_space(4.0);
 
                             let restore_button = egui::Button::new("Restaurar")
@@ -57,7 +75,13 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                             {
                                 clicked_restore = Some(backup.filename.clone());
                             }
-                        });
+                        })
+                        .response;
+
+                    let clickable = response.interact(egui::Sense::click());
+                    if clickable.clicked() && clicked_restore.is_none() {
+                        state.selected_backup_filename = Some(backup.filename.clone());
+                    }
 
                     ui.add_space(3.0);
                 }

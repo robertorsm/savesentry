@@ -1,3 +1,4 @@
+use chrono::{Datelike, Timelike};
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -16,9 +17,12 @@ pub struct FileWatcher {
     exclude_pattern: Option<glob::Pattern>,
     save_pattern: Option<glob::Pattern>,
     last_backup_time: Arc<AtomicU64>,
+    backup_max_count: u32,
+    backup_recursive: bool,
 }
 
 impl FileWatcher {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         save_path: PathBuf,
         backup_dir: PathBuf,
@@ -26,6 +30,8 @@ impl FileWatcher {
         exclude_pattern_str: Option<String>,
         save_pattern_str: Option<String>,
         last_backup_time: Arc<AtomicU64>,
+        backup_max_count: u32,
+        backup_recursive: bool,
     ) -> Self {
         let exclude_pattern = exclude_pattern_str.and_then(|s| glob::Pattern::new(&s).ok());
         let save_pattern = save_pattern_str.and_then(|s| glob::Pattern::new(&s).ok());
@@ -38,6 +44,8 @@ impl FileWatcher {
             exclude_pattern,
             save_pattern,
             last_backup_time,
+            backup_max_count,
+            backup_recursive,
         }
     }
 
@@ -93,19 +101,51 @@ impl FileWatcher {
             return Err("Timeout ainda nao expirou".into());
         }
 
-        fs::create_dir_all(&self.backup_dir)?;
+        let backup_path = Self::create_backup_from_dir(
+            &self.save_path,
+            &self.backup_dir,
+            self.exclude_pattern.as_ref(),
+            self.save_pattern.as_ref(),
+            None,
+            self.backup_max_count,
+            self.backup_recursive,
+        )?;
+
+        let now = SystemTime::now();
+        self.last_backup = Some(now);
+        self.last_backup_time.store(
+            now.duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+            Ordering::Relaxed,
+        );
+
+        Ok(backup_path)
+    }
+
+    /// Cria um backup ZIP a partir de um diretório de save
+    pub fn create_backup_from_dir(
+        save_path: &std::path::Path,
+        backup_dir: &std::path::Path,
+        exclude_pattern: Option<&glob::Pattern>,
+        save_pattern: Option<&glob::Pattern>,
+        custom_name: Option<&str>,
+        backup_max_count: u32,
+        backup_recursive: bool,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        fs::create_dir_all(backup_dir)?;
 
         let now = chrono::Local::now();
-        let backup_name = format!("backup_{}.zip", now.format("%d-%m-%Y_%H-%M-%S"));
-        let backup_path = self.backup_dir.join(&backup_name);
+        let backup_name = if let Some(name) = custom_name {
+            format!("{}.zip", name)
+        } else {
+            format!("backup_{}.zip", now.format("%d-%m-%Y_%H-%M-%S"))
+        };
+        let backup_path = backup_dir.join(&backup_name);
 
         let file = fs::File::create(&backup_path)?;
         let mut zip = zip::ZipWriter::new(file);
 
-        let options = zip::write::FileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
-
-        let save_dir = std::path::Path::new(&self.save_path);
         let match_opts = glob::MatchOptions {
             case_sensitive: cfg!(not(target_os = "windows")),
             require_literal_separator: false,
@@ -113,24 +153,47 @@ impl FileWatcher {
         };
 
         let mut files_added = 0;
-        if let Ok(entries) = fs::read_dir(save_dir) {
-            for entry in entries.flatten() {
-                if let Ok(metadata) = entry.metadata() {
-                    if metadata.is_file() {
-                        if let Some(name) = entry.file_name().to_str() {
-                            if let Some(pattern) = &self.save_pattern {
-                                if !pattern.matches_with(name, match_opts) {
-                                    continue;
-                                }
-                            }
-                            if self.should_exclude(&entry.path()) {
-                                continue;
-                            }
+        let mut queue: Vec<std::path::PathBuf> = vec![save_path.to_path_buf()];
+        let _base_depth = save_path.components().count();
 
-                            zip.start_file(name, options)?;
-                            let mut source = fs::File::open(entry.path())?;
-                            io::copy(&mut source, &mut zip)?;
-                            files_added += 1;
+        while let Some(current_dir) = queue.pop() {
+            if let Ok(entries) = fs::read_dir(&current_dir) {
+                for entry in entries.flatten() {
+                    if let Ok(metadata) = entry.metadata() {
+                        if metadata.is_file() {
+                            if let Some(name) = entry.file_name().to_str() {
+                                if let Some(pattern) = save_pattern {
+                                    if !pattern.matches_with(name, match_opts) {
+                                        continue;
+                                    }
+                                }
+                                if let Some(pattern) = exclude_pattern {
+                                    if pattern.matches_with(name, match_opts) {
+                                        continue;
+                                    }
+                                }
+
+                                let mut options = zip::write::FileOptions::default()
+                                    .compression_method(zip::CompressionMethod::Deflated);
+
+                                if let Ok(modified) = metadata.modified() {
+                                    if let Some(zip_time) = system_time_to_zip_datetime(modified) {
+                                        options = options.last_modified_time(zip_time);
+                                    }
+                                }
+
+                                let entry_path = entry.path();
+                                let relative_path =
+                                    entry_path.strip_prefix(save_path).unwrap_or(&entry_path);
+                                let zip_name = relative_path.to_string_lossy().replace('\\', "/");
+
+                                zip.start_file(&zip_name, options)?;
+                                let mut source = fs::File::open(entry.path())?;
+                                io::copy(&mut source, &mut zip)?;
+                                files_added += 1;
+                            }
+                        } else if metadata.is_dir() && backup_recursive {
+                            queue.push(entry.path());
                         }
                     }
                 }
@@ -144,24 +207,16 @@ impl FileWatcher {
             return Err("Nenhum arquivo encontrado para backup".into());
         }
 
-        let now = SystemTime::now();
-        self.last_backup = Some(now);
-        self.last_backup_time.store(
-            now.duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
-            Ordering::Relaxed,
-        );
-        self.rotate_backups()?;
+        Self::rotate_backups_with_count(backup_dir, backup_max_count as usize)?;
 
         Ok(backup_path)
     }
 
-    /// Remove backups antigos mantendo apenas os 50 mais recentes
-    fn rotate_backups(&self) -> Result<(), Box<dyn std::error::Error>> {
-        const MAX_BACKUPS: usize = 50;
-
-        let mut entries: Vec<_> = fs::read_dir(&self.backup_dir)?
+    fn rotate_backups_with_count(
+        backup_dir: &std::path::Path,
+        max_backups: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut entries: Vec<_> = fs::read_dir(backup_dir)?
             .filter_map(|e| e.ok())
             .filter(|e| {
                 e.path()
@@ -172,7 +227,7 @@ impl FileWatcher {
             })
             .collect();
 
-        if entries.len() <= MAX_BACKUPS {
+        if entries.len() <= max_backups {
             return Ok(());
         }
 
@@ -190,11 +245,40 @@ impl FileWatcher {
         });
 
         // Remove os mais antigos
-        let to_remove = entries.len() - MAX_BACKUPS;
+        let to_remove = entries.len() - max_backups;
         for entry in entries.iter().take(to_remove) {
             let _ = fs::remove_file(entry.path());
         }
 
         Ok(())
     }
+}
+
+fn system_time_to_zip_datetime(time: SystemTime) -> Option<zip::DateTime> {
+    let datetime = chrono::DateTime::<chrono::Local>::from(time);
+    let year = datetime.year() as u16;
+    let month = datetime.month() as u8;
+    let day = datetime.day() as u8;
+    let hour = datetime.hour() as u8;
+    let minute = datetime.minute() as u8;
+    let second = datetime.second() as u8;
+    zip::DateTime::from_date_and_time(year, month, day, hour, minute, second).ok()
+}
+
+/// Captura screenshot do monitor principal e salva como BMP
+pub fn capture_screenshot(backup_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    use screenshots::Screen;
+
+    let screens = Screen::all()?;
+    if screens.is_empty() {
+        return Err("Nenhum monitor encontrado".into());
+    }
+
+    let screen = &screens[0];
+    let image = screen.capture()?;
+
+    let screenshot_path = backup_path.with_extension("png");
+    image.save(&screenshot_path)?;
+
+    Ok(())
 }

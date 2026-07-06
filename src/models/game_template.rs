@@ -7,6 +7,7 @@ pub struct GameTemplate {
     pub process_name: String,   // Nome do processo do jogo
     pub save_pattern: String,   // Padrão de arquivos (ex: *.sav)
     pub exclude_pattern: Option<String>, // Padrão glob para excluir arquivos (ex: *.tmp)
+    pub default_exclude_pattern: Option<String>, // Padrão built-in de exclusão automático
     pub backup_dir: String,     // Diretório de backup para este template
     pub backup_delay_minutes: u32, // Intervalo mínimo entre backups (em minutos)
     pub version: i32,
@@ -25,7 +26,7 @@ static STEAM_ID_CACHE: Mutex<Option<String>> = Mutex::new(None);
 impl GameTemplate {
     fn read_registry_steam_path() -> Option<String> {
         let output = std::process::Command::new("reg")
-            .args(&["query", "HKCU\\Software\\Valve\\Steam", "/v", "SteamPath"])
+            .args(["query", "HKCU\\Software\\Valve\\Steam", "/v", "SteamPath"])
             .output()
             .ok()?;
 
@@ -87,7 +88,9 @@ impl GameTemplate {
 
             if found.is_none() {
                 #[cfg(debug_assertions)]
-                eprintln!("⚠️ Não foi possível detectar Steam userdata em nenhum caminho conhecido");
+                eprintln!(
+                    "⚠️ Não foi possível detectar Steam userdata em nenhum caminho conhecido"
+                );
             }
             found
         };
@@ -106,7 +109,12 @@ impl GameTemplate {
 
     fn read_registry_active_user() -> Option<u32> {
         let output = std::process::Command::new("reg")
-            .args(&["query", "HKCU\\Software\\Valve\\Steam\\ActiveProcess", "/v", "ActiveUser"])
+            .args([
+                "query",
+                "HKCU\\Software\\Valve\\Steam\\ActiveProcess",
+                "/v",
+                "ActiveUser",
+            ])
             .output()
             .ok()?;
 
@@ -146,7 +154,9 @@ impl GameTemplate {
                     if metadata.is_dir() {
                         if let Some(name) = entry.file_name().to_str() {
                             if name.chars().all(|c| c.is_ascii_digit()) {
-                                let modified = metadata.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                                let modified = metadata
+                                    .modified()
+                                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
                                 candidates.push((name.to_string(), modified));
                             }
                         }
@@ -154,7 +164,7 @@ impl GameTemplate {
                 }
             }
 
-            candidates.sort_by(|a, b| b.1.cmp(&a.1));
+            candidates.sort_by_key(|b| std::cmp::Reverse(b.1));
             candidates.first().map(|(id, _)| {
                 let steam64 = Self::steamid64_from_account_id(id.parse::<u32>().unwrap_or(0));
                 #[cfg(debug_assertions)]

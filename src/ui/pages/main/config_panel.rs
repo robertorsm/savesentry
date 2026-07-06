@@ -43,8 +43,7 @@ pub fn render_config_panel(ui: &mut egui::Ui, state: &mut AppState) {
     ui.add_space(8.0);
 
     ui.horizontal(|ui| {
-        let can_start = state.selected_template_id.is_some()
-            && state.active_watcher.is_none();
+        let can_start = state.selected_template_id.is_some() && state.active_watcher.is_none();
 
         let can_stop = state.active_watcher.is_some();
 
