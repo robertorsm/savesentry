@@ -69,18 +69,19 @@ pub(super) fn render_templates_list(ui: &mut egui::Ui, state: &mut AppState) {
                                         .weak()
                                         .size(10.0),
                                 );
-                                let dt_str = if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&template.created_at) {
+                                let dt_str = if let Ok(dt) =
+                                    chrono::DateTime::parse_from_rfc3339(&template.created_at)
+                                {
                                     dt.format("%d/%m/%Y").to_string()
-                                } else if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(&template.created_at, "%Y-%m-%d %H:%M:%S") {
+                                } else if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(
+                                    &template.created_at,
+                                    "%Y-%m-%d %H:%M:%S",
+                                ) {
                                     naive.format("%d/%m/%Y").to_string()
                                 } else {
                                     template.created_at.clone()
                                 };
-                                ui.label(
-                                    egui::RichText::new(dt_str)
-                                        .weak()
-                                        .size(10.0),
-                                );
+                                ui.label(egui::RichText::new(dt_str).weak().size(10.0));
                             });
 
                             ui.add_space(6.0);

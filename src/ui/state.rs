@@ -77,6 +77,10 @@ pub struct AppState {
 
     // Rastreia o último backup já refletido na UI para atualização automática
     last_seen_backup_time: u64,
+
+    pub last_ui_update: std::time::Instant,
+    pub selected_backup_filename: Option<String>,
+    pub screenshot_textures: std::collections::HashMap<String, eframe::egui::TextureHandle>,
 }
 
 /// Entrada no histórico de backups
@@ -136,6 +140,9 @@ impl AppState {
             },
             restart_monitoring_after: None,
             last_seen_backup_time: 0,
+            last_ui_update: std::time::Instant::now(),
+            selected_backup_filename: None,
+            screenshot_textures: std::collections::HashMap::new(),
         };
 
         // 🚀 Auto-restore último perfil usado
@@ -218,7 +225,10 @@ impl AppState {
         let save_dir = std::path::Path::new(&self.current_save_path);
         if !save_dir.is_dir() {
             #[cfg(debug_assertions)]
-            eprintln!("[find_latest_save] Nao eh diretorio: {:?}", self.current_save_path);
+            eprintln!(
+                "[find_latest_save] Nao eh diretorio: {:?}",
+                self.current_save_path
+            );
             return None;
         }
 
@@ -255,10 +265,7 @@ impl AppState {
                             );
                             if matched {
                                 if let Ok(modified) = metadata.modified() {
-                                    if latest
-                                        .as_ref()
-                                        .map_or(true, |(_, t)| modified > *t)
-                                    {
+                                    if latest.as_ref().is_none_or(|(_, t)| modified > *t) {
                                         latest = Some((entry.path(), modified));
                                     }
                                 }
@@ -420,7 +427,10 @@ impl AppState {
             let target = template.process_name.to_lowercase();
             if running_processes.iter().any(|name| name == &target) {
                 #[cfg(debug_assertions)]
-                println!("🎮 Jogo detectado no startup: {} ({})", template.name, template.process_name);
+                println!(
+                    "🎮 Jogo detectado no startup: {} ({})",
+                    template.name, template.process_name
+                );
 
                 self.select_template(template.id);
                 return;
@@ -429,5 +439,51 @@ impl AppState {
 
         #[cfg(debug_assertions)]
         println!("🔍 Nenhum jogo detectado no startup");
+    }
+
+    pub fn get_backup_dir(&self) -> String {
+        if let Some(ref profile) = self.active_profile {
+            if !profile.backup_dir.is_empty() {
+                return profile.backup_dir.clone();
+            }
+        }
+        self.config.backup_dir.clone()
+    }
+
+    pub fn load_screenshot_texture(
+        &mut self,
+        ctx: &eframe::egui::Context,
+        filename: &str,
+    ) -> Option<eframe::egui::TextureHandle> {
+        if let Some(tex) = self.screenshot_textures.get(filename) {
+            return Some(tex.clone());
+        }
+
+        let backup_dir = self.get_backup_dir();
+        if backup_dir.is_empty() {
+            return None;
+        }
+
+        let path = std::path::Path::new(&backup_dir)
+            .join(filename)
+            .with_extension("png");
+        if !path.exists() {
+            return None;
+        }
+
+        let img = image::open(&path).ok()?;
+        let rgba = img.to_rgba8();
+        let size = [rgba.width() as usize, rgba.height() as usize];
+        let color_image = eframe::egui::ColorImage::from_rgba_unmultiplied(size, &rgba);
+
+        let texture = ctx.load_texture(
+            filename,
+            color_image,
+            eframe::egui::TextureOptions::default(),
+        );
+
+        self.screenshot_textures
+            .insert(filename.to_string(), texture.clone());
+        Some(texture)
     }
 }

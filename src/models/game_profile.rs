@@ -8,16 +8,23 @@ pub struct GameProfile {
     pub backup_dir: String,       // Diretório onde backups serão salvos
     pub backup_delay_minutes: u32, // Intervalo mínimo entre backups (em minutos)
     pub exclude_pattern: Option<String>, // Padrão glob de exclusão (pode sobrescrever template)
-    pub save_pattern: Option<String>,  // Padrão glob de inclusão (ex: *.sav)
+    pub save_pattern: Option<String>, // Padrão glob de inclusão (ex: *.sav)
     pub is_active: bool,          // Se o monitoramento está ativo
     pub process_name: Option<String>, // Nome do processo para monitoramento (ex: game.exe)
     pub created_at: String,       // Data de criação do perfil
+    pub backup_max_count: u32,    // Máximo de backups a manter (default: 50)
+    pub backup_recursive: bool,   // Se faz backup recursivo de subdiretórios
 }
 
 impl GameProfile {
     /// Cria um novo perfil de jogo
     #[allow(dead_code)]
-    pub fn new(name: String, save_path: String, backup_dir: String, backup_delay_minutes: u32) -> Self {
+    pub fn new(
+        name: String,
+        save_path: String,
+        backup_dir: String,
+        backup_delay_minutes: u32,
+    ) -> Self {
         Self {
             id: 0,
             template_id: None,
@@ -30,6 +37,8 @@ impl GameProfile {
             is_active: false,
             process_name: None,
             created_at: chrono::Local::now().to_rfc3339(),
+            backup_max_count: 50,
+            backup_recursive: false,
         }
     }
 
@@ -53,6 +62,8 @@ impl GameProfile {
             is_active: false,
             process_name: Some(template.process_name.clone()),
             created_at: chrono::Local::now().to_rfc3339(),
+            backup_max_count: 50,
+            backup_recursive: false,
         }
     }
 }

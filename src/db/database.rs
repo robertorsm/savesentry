@@ -36,8 +36,8 @@ impl Database {
     /// Insere um novo perfil de jogo
     pub fn insert_game_profile(&self, profile: &crate::models::GameProfile) -> Result<i64> {
         self.conn.execute(
-            "INSERT INTO game_profiles (template_id, name, save_path, backup_dir, backup_delay_minutes, exclude_pattern, save_pattern, is_active, process_name, created_at) 
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO game_profiles (template_id, name, save_path, backup_dir, backup_delay_minutes, exclude_pattern, save_pattern, is_active, process_name, created_at, backup_max_count, backup_recursive) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             rusqlite::params![
                 profile.template_id,
                 profile.name,
@@ -49,6 +49,8 @@ impl Database {
                 profile.is_active as i32,
                 &profile.process_name,
                 profile.created_at,
+                profile.backup_max_count,
+                profile.backup_recursive as i32,
             ],
         )?;
         Ok(self.conn.last_insert_rowid())
@@ -59,7 +61,7 @@ impl Database {
     /// Lista todos os templates de jogos
     pub fn list_game_templates(&self) -> Result<Vec<crate::models::GameTemplate>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, save_directory, process_name, save_pattern, exclude_pattern, backup_dir, backup_delay_minutes, version, is_official, created_at 
+            "SELECT id, name, save_directory, process_name, save_pattern, exclude_pattern, default_exclude_pattern, backup_dir, backup_delay_minutes, version, is_official, created_at 
              FROM game_templates ORDER BY name ASC",
         )?;
 
@@ -72,11 +74,12 @@ impl Database {
                     process_name: row.get(3)?,
                     save_pattern: row.get(4)?,
                     exclude_pattern: row.get(5)?,
-                    backup_dir: row.get(6)?,
-                    backup_delay_minutes: row.get(7)?,
-                    version: row.get(8)?,
-                    is_official: row.get::<_, i32>(9)? != 0,
-                    created_at: row.get(10)?,
+                    default_exclude_pattern: row.get(6)?,
+                    backup_dir: row.get(7)?,
+                    backup_delay_minutes: row.get(8)?,
+                    version: row.get(9)?,
+                    is_official: row.get::<_, i32>(10)? != 0,
+                    created_at: row.get(11)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -84,6 +87,7 @@ impl Database {
         Ok(templates)
     }
 
+    #[allow(clippy::too_many_arguments)]
     /// Insere um novo template de jogo
     pub fn insert_game_template(
         &self,
@@ -92,18 +96,20 @@ impl Database {
         process_name: &str,
         save_pattern: &str,
         exclude_pattern: Option<&str>,
+        default_exclude_pattern: Option<&str>,
         backup_dir: &str,
         backup_delay_minutes: u32,
     ) -> Result<i64> {
         self.conn.execute(
-            "INSERT INTO game_templates (name, save_directory, process_name, save_pattern, exclude_pattern, backup_dir, backup_delay_minutes, version, is_official, created_at) 
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, 0, datetime('now'))",
+            "INSERT INTO game_templates (name, save_directory, process_name, save_pattern, exclude_pattern, default_exclude_pattern, backup_dir, backup_delay_minutes, version, is_official, created_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1, 0, datetime('now'))",
             rusqlite::params![
                 name,
                 save_directory,
                 process_name,
                 save_pattern,
                 exclude_pattern,
+                default_exclude_pattern,
                 backup_dir,
                 backup_delay_minutes,
             ],
@@ -111,6 +117,7 @@ impl Database {
         Ok(self.conn.last_insert_rowid())
     }
 
+    #[allow(clippy::too_many_arguments)]
     /// Atualiza um template existente
     pub fn update_game_template(
         &self,
@@ -120,19 +127,21 @@ impl Database {
         process_name: &str,
         save_pattern: &str,
         exclude_pattern: Option<&str>,
+        default_exclude_pattern: Option<&str>,
         backup_dir: &str,
         backup_delay_minutes: u32,
     ) -> Result<()> {
         self.conn.execute(
             "UPDATE game_templates 
-             SET name = ?1, save_directory = ?2, process_name = ?3, save_pattern = ?4, exclude_pattern = ?5, backup_dir = ?6, backup_delay_minutes = ?7, version = version + 1 
-             WHERE id = ?8",
+             SET name = ?1, save_directory = ?2, process_name = ?3, save_pattern = ?4, exclude_pattern = ?5, default_exclude_pattern = ?6, backup_dir = ?7, backup_delay_minutes = ?8, version = version + 1 
+             WHERE id = ?9",
             rusqlite::params![
                 name,
                 save_directory,
                 process_name,
                 save_pattern,
                 exclude_pattern,
+                default_exclude_pattern,
                 backup_dir,
                 backup_delay_minutes,
                 id,
@@ -197,7 +206,7 @@ impl Database {
     /// Obtém um perfil específico por ID
     pub fn get_game_profile(&self, id: i64) -> Result<crate::models::GameProfile> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, template_id, name, save_path, backup_dir, backup_delay_minutes, exclude_pattern, save_pattern, is_active, process_name, created_at 
+            "SELECT id, template_id, name, save_path, backup_dir, backup_delay_minutes, exclude_pattern, save_pattern, is_active, process_name, created_at, backup_max_count, backup_recursive 
              FROM game_profiles WHERE id = ?1"
         )?;
 
@@ -214,6 +223,8 @@ impl Database {
                 is_active: row.get::<_, i32>(8)? != 0,
                 process_name: row.get(9).ok(),
                 created_at: row.get(10)?,
+                backup_max_count: row.get::<_, Option<u32>>(11)?.unwrap_or(50),
+                backup_recursive: row.get::<_, Option<i32>>(12)?.unwrap_or(0) != 0,
             })
         })
     }

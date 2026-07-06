@@ -20,7 +20,8 @@ impl AppState {
             self.template_form.original_backup_delay_minutes = template.backup_delay_minutes;
             self.template_form.original_process = template.process_name.clone();
             self.template_form.original_pattern = template.save_pattern.clone();
-            self.template_form.original_exclude = template.exclude_pattern.clone().unwrap_or_default();
+            self.template_form.original_exclude =
+                template.exclude_pattern.clone().unwrap_or_default();
         }
     }
 
@@ -56,6 +57,7 @@ impl AppState {
             &self.template_form.process,
             &self.template_form.pattern,
             exclude_pattern.as_deref(),
+            None, // default_exclude_pattern não é configurável pelo usuário
             &self.template_form.backup_dir,
             self.template_form.backup_delay_minutes,
         ) {
@@ -87,14 +89,14 @@ impl AppState {
                 Some(self.template_form.exclude.clone())
             };
 
-            let needs_watcher_restart =
-                self.template_form.save_dir != self.template_form.original_save_dir
-                    || self.template_form.backup_dir != self.template_form.original_backup_dir
-                    || self.template_form.process != self.template_form.original_process
-                    || self.template_form.pattern != self.template_form.original_pattern
-                    || self.template_form.exclude != self.template_form.original_exclude
-                    || self.template_form.backup_delay_minutes
-                        != self.template_form.original_backup_delay_minutes;
+            let needs_watcher_restart = self.template_form.save_dir
+                != self.template_form.original_save_dir
+                || self.template_form.backup_dir != self.template_form.original_backup_dir
+                || self.template_form.process != self.template_form.original_process
+                || self.template_form.pattern != self.template_form.original_pattern
+                || self.template_form.exclude != self.template_form.original_exclude
+                || self.template_form.backup_delay_minutes
+                    != self.template_form.original_backup_delay_minutes;
 
             match self.db.update_game_template(
                 template_id,
@@ -103,6 +105,7 @@ impl AppState {
                 &self.template_form.process,
                 &self.template_form.pattern,
                 exclude_pattern.as_deref(),
+                None, // default_exclude_pattern não é configurável pelo usuário (apenas oficiais)
                 &self.template_form.backup_dir,
                 self.template_form.backup_delay_minutes,
             ) {

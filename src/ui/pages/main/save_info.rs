@@ -50,7 +50,9 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.label("Backup Delay:");
-                ui.label(egui::RichText::new(format!("{} min", profile.backup_delay_minutes)).weak());
+                ui.label(
+                    egui::RichText::new(format!("{} min", profile.backup_delay_minutes)).weak(),
+                );
             });
             ui.horizontal(|ui| {
                 ui.label("Backups em:");
@@ -85,7 +87,9 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
     if let Some(ref watcher) = state.active_watcher {
         if let Some(ref profile) = state.active_profile {
             if profile.is_active {
-                if let Some(remaining) = watcher.remaining_backup_seconds(profile.backup_delay_minutes) {
+                if let Some(remaining) =
+                    watcher.remaining_backup_seconds(profile.backup_delay_minutes)
+                {
                     ui.add_space(4.0);
                     let mins = remaining / 60;
                     let secs = remaining % 60;
@@ -122,5 +126,44 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
                     .weak(),
             );
         });
+    }
+
+    let target_backup = state
+        .selected_backup_filename
+        .clone()
+        .or_else(|| state.backup_history.first().map(|b| b.filename.clone()));
+
+    if let Some(filename) = target_backup {
+        let backup_dir = state.get_backup_dir();
+        let screenshot_path = std::path::Path::new(&backup_dir)
+            .join(&filename)
+            .with_extension("png");
+        if screenshot_path.exists() {
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(4.0);
+
+            let label = if state.selected_backup_filename.is_some() {
+                "Screenshot do backup selecionado"
+            } else {
+                "Screenshot do backup mais recente"
+            };
+            ui.label(egui::RichText::new(label).weak().size(11.0));
+            ui.add_space(4.0);
+
+            let max_width = ui.available_width();
+            let max_height = ui.available_height().min(280.0);
+
+            if let Some(texture) = state.load_screenshot_texture(ui.ctx(), &filename) {
+                let [tex_w, tex_h] = texture.size();
+                let aspect = tex_w as f32 / tex_h as f32;
+                let width = max_width.min(max_height * aspect);
+                let height = width / aspect;
+
+                ui.centered_and_justified(|ui| {
+                    ui.add(egui::Image::new(&texture).fit_to_exact_size(egui::vec2(width, height)));
+                });
+            }
+        }
     }
 }
