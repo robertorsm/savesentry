@@ -89,12 +89,14 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                         })
                         .response;
 
-                    response.context_menu(|ui| {
-                        if ui.button("🗑 Excluir").clicked() {
-                            delete_backup = Some(backup.filename.clone());
-                            ui.close();
-                        }
-                    });
+                    response
+                        .interact(egui::Sense::click())
+                        .context_menu(|ui| {
+                            if ui.button("🗑 Excluir").clicked() {
+                                delete_backup = Some(backup.filename.clone());
+                                ui.close();
+                            }
+                        });
 
                     let frame_clicked = ui.input(|i| {
                         let pointer = &i.pointer;

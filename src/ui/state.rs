@@ -409,19 +409,21 @@ impl AppState {
                                     "✅ Auto-started watcher for process: {:?}",
                                     self.active_profile.as_ref().unwrap().process_name
                                 );
+                                return;
                             }
-                            Err(_e) => {
-                                #[cfg(debug_assertions)]
-                                eprintln!("❌ Failed to auto-start watcher: {}", _e);
+                            Err(e) => {
+                                self.error_message =
+                                    Some(format!("Falha ao iniciar watcher: {}", e));
+                                self.active_profile = None;
+                                self.selected_template_id = None;
+                                self.current_save_path.clear();
                             }
                         }
                     }
-                    return;
                 }
             }
         }
 
-        // Se não restaurou perfil, tenta detectar jogo rodando
         self.try_auto_detect_running_game();
     }
 

@@ -46,6 +46,9 @@ impl eframe::App for App {
             }
         }
 
+        if self.state.active_watcher.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_secs(1));
+        }
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
