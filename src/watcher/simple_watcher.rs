@@ -16,6 +16,7 @@ pub struct WatcherHandle {
     _process_monitor_handle: Option<thread::JoinHandle<()>>,
     last_backup_time: Arc<AtomicU64>,
     pub recent_save: Arc<Mutex<Option<(String, SystemTime)>>>,
+    pub process_running: Arc<AtomicBool>,
 }
 
 impl WatcherHandle {
@@ -73,6 +74,9 @@ pub fn start_watching(
 
     let recent_save = Arc::new(Mutex::new(None));
     let recent_save_clone = Arc::clone(&recent_save);
+
+    let process_running = Arc::new(AtomicBool::new(true));
+    let process_running_clone = Arc::clone(&process_running);
 
     // Thread de file watching
     let file_watcher_handle = thread::spawn(move || {
@@ -284,9 +288,11 @@ pub fn start_watching(
                     }
                     ProcessState::Stopped => {
                         #[cfg(debug_assertions)]
-                        println!("⛔ Processo {} fechado. Pausando monitoramento", proc_name);
+                        println!("⛔ Processo {} fechado. Parando monitoramento", proc_name);
 
                         should_monitor_clone.store(false, Ordering::Relaxed);
+                        process_running_clone.store(false, Ordering::Relaxed);
+                        ctx.request_repaint();
                     }
                     ProcessState::Waiting => {
                         // Continue esperando
@@ -306,5 +312,6 @@ pub fn start_watching(
         _process_monitor_handle: process_monitor_handle,
         last_backup_time,
         recent_save,
+        process_running,
     })
 }

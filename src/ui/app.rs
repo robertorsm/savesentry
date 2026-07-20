@@ -46,7 +46,10 @@ impl eframe::App for App {
             }
         }
 
-        if self.state.active_watcher.is_some() {
+        if let Some(ref watcher) = self.state.active_watcher {
+            if !watcher.process_running.load(std::sync::atomic::Ordering::Relaxed) {
+                self.state.stop_monitoring();
+            }
             ctx.request_repaint_after(std::time::Duration::from_secs(1));
         }
     }
