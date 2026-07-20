@@ -36,6 +36,16 @@ impl eframe::App for App {
             if self.state.check_backup_updates() {
                 ctx.request_repaint();
             }
+
+            if self.state.active_watcher.is_none() {
+                if let Some(ref profile) = self.state.active_profile {
+                    if let Some(ref proc_name) = profile.process_name {
+                        if crate::ui::actions::monitoring::is_process_running(proc_name) {
+                            self.state.start_monitoring();
+                        }
+                    }
+                }
+            }
         }
 
         if let Some(instant) = self.state.restart_monitoring_after {
@@ -50,6 +60,18 @@ impl eframe::App for App {
             if !watcher.process_running.load(std::sync::atomic::Ordering::Relaxed) {
                 self.state.stop_monitoring();
             }
+        }
+
+        if self.state.active_watcher.is_some()
+            || (self.state.active_profile.is_some()
+                && self
+                    .state
+                    .active_profile
+                    .as_ref()
+                    .unwrap()
+                    .process_name
+                    .is_some())
+        {
             ctx.request_repaint_after(std::time::Duration::from_secs(1));
         }
     }

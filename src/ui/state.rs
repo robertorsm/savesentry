@@ -394,7 +394,40 @@ impl AppState {
                     #[cfg(debug_assertions)]
                     println!("📋 Restored last profile: {}", profile.name);
 
-                    if profile.process_name.is_some() {
+                    if let Some(ref proc_name) = profile.process_name {
+                        if crate::ui::actions::monitoring::is_process_running(proc_name) {
+                            match crate::watcher::start_watching(profile, self.egui_ctx.clone()) {
+                                Ok(handle) => {
+                                    self.active_watcher = Some(handle);
+                                    if let Some(ref mut active_profile) = self.active_profile {
+                                        active_profile.is_active = true;
+                                    }
+                                    self.invalidate_backup_cache();
+                                    self.reload_backup_history();
+
+                                    #[cfg(debug_assertions)]
+                                    println!(
+                                        "✅ Auto-started watcher for process: {:?}",
+                                        self.active_profile.as_ref().unwrap().process_name
+                                    );
+                                    return;
+                                }
+                                Err(e) => {
+                                    self.error_message =
+                                        Some(format!("Falha ao iniciar watcher: {}", e));
+                                    self.active_profile = None;
+                                    self.selected_template_id = None;
+                                    self.current_save_path.clear();
+                                }
+                            }
+                        } else {
+                            self.success_message = Some(format!(
+                                "Perfil '{}' restaurado — aguardando '{}'",
+                                profile.name, proc_name
+                            ));
+                            return;
+                        }
+                    } else {
                         match crate::watcher::start_watching(profile, self.egui_ctx.clone()) {
                             Ok(handle) => {
                                 self.active_watcher = Some(handle);
@@ -403,12 +436,6 @@ impl AppState {
                                 }
                                 self.invalidate_backup_cache();
                                 self.reload_backup_history();
-
-                                #[cfg(debug_assertions)]
-                                println!(
-                                    "✅ Auto-started watcher for process: {:?}",
-                                    self.active_profile.as_ref().unwrap().process_name
-                                );
                                 return;
                             }
                             Err(e) => {

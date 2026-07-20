@@ -360,7 +360,7 @@ impl AppState {
     }
 }
 
-fn is_process_running(name: &str) -> bool {
+pub(crate) fn is_process_running(name: &str) -> bool {
     use sysinfo::{ProcessesToUpdate, System};
     let mut system = System::new();
     system.refresh_processes(ProcessesToUpdate::All, true);
