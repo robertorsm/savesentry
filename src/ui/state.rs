@@ -178,17 +178,7 @@ impl AppState {
         };
 
         let backup_dir = std::path::Path::new(&backup_dir_str);
-
-        #[cfg(debug_assertions)]
-        println!(
-            "[reload_backup_history] scanning dir: {} exists={}",
-            backup_dir.display(),
-            backup_dir.exists()
-        );
-
         if !backup_dir.exists() {
-            #[cfg(debug_assertions)]
-            eprintln!("[reload_backup_history] backup dir does not exist");
             return;
         }
 
@@ -202,38 +192,26 @@ impl AppState {
             .unwrap_or("save")
             .to_string();
 
-        match std::fs::read_dir(backup_dir) {
-            Ok(entries) => {
-                for entry in entries.flatten() {
-                    if let Ok(metadata) = entry.metadata() {
-                        if metadata.is_file() {
-                            if let Some(filename) = entry.file_name().to_str() {
-                                if filename.ends_with(".zip") {
-                                    backups.push(BackupEntry {
-                                        filename: filename.to_string(),
-                                        created_at: metadata
-                                            .modified()
-                                            .unwrap_or(std::time::SystemTime::now()),
-                                        size_bytes: metadata.len(),
-                                        save_name: save_name.clone(),
-                                    });
-                                }
+        if let Ok(entries) = std::fs::read_dir(backup_dir) {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    if metadata.is_file() {
+                        if let Some(filename) = entry.file_name().to_str() {
+                            if filename.ends_with(".zip") {
+                                backups.push(BackupEntry {
+                                    filename: filename.to_string(),
+                                    created_at: metadata
+                                        .modified()
+                                        .unwrap_or(std::time::SystemTime::now()),
+                                    size_bytes: metadata.len(),
+                                    save_name: save_name.clone(),
+                                });
                             }
                         }
                     }
                 }
             }
-            Err(e) => {
-                #[cfg(debug_assertions)]
-                eprintln!("[reload_backup_history] read_dir error: {}", e);
-            }
         }
-
-        #[cfg(debug_assertions)]
-        println!(
-            "[reload_backup_history] found {} .zip files",
-            backups.len()
-        );
 
         // Ordena por data (mais recente primeiro)
         backups.sort_by_key(|b| std::cmp::Reverse(b.created_at));
@@ -396,42 +374,24 @@ impl AppState {
     }
 
     fn restore_last_profile(&mut self) {
-        #[cfg(debug_assertions)]
-        println!("[restore_last_profile] starting...");
-
         if let Ok((last_profile_id, last_backup_dir, last_backup_delay)) = self.db.get_app_state() {
-            #[cfg(debug_assertions)]
-            println!(
-                "[restore_last_profile] app_state: last_profile_id={:?}, last_backup_dir={:?}",
-                last_profile_id, last_backup_dir
-            );
-
             if let Some(dir) = last_backup_dir {
                 self.config.backup_dir = dir;
             }
             self.config.backup_delay_minutes = last_backup_delay;
 
             if let Some(profile_id) = last_profile_id {
-                #[cfg(debug_assertions)]
-                println!("[restore_last_profile] loading profile id={}", profile_id);
-
                 if let Ok(profile) = self.db.get_game_profile(profile_id) {
-                    #[cfg(debug_assertions)]
-                    println!(
-                        "[restore_last_profile] profile loaded: name={}, backup_dir={}, process={:?}",
-                        profile.name, profile.backup_dir, profile.process_name
-                    );
-
                     self.active_profile = Some(profile.clone());
                     self.selected_template_id = profile.template_id;
                     self.current_save_path = profile.save_path.clone();
                     self.current_save_file.clear();
                     self.update_save_info();
 
-                    if profile.process_name.is_some() {
-                        #[cfg(debug_assertions)]
-                        println!("[restore_last_profile] process_name present, starting watcher");
+                    #[cfg(debug_assertions)]
+                    println!("📋 Restored last profile: {}", profile.name);
 
+                    if profile.process_name.is_some() {
                         match crate::watcher::start_watching(profile) {
                             Ok(handle) => {
                                 self.active_watcher = Some(handle);
@@ -443,30 +403,22 @@ impl AppState {
 
                                 #[cfg(debug_assertions)]
                                 println!(
-                                    "[restore_last_profile] watcher started, backup_history len={}",
-                                    self.backup_history.len()
+                                    "✅ Auto-started watcher for process: {:?}",
+                                    self.active_profile.as_ref().unwrap().process_name
                                 );
                             }
                             Err(_e) => {
                                 #[cfg(debug_assertions)]
-                                eprintln!("[restore_last_profile] watcher start failed: {}", _e);
+                                eprintln!("❌ Failed to auto-start watcher: {}", _e);
                             }
                         }
                     }
                     return;
-                } else {
-                    #[cfg(debug_assertions)]
-                    eprintln!("[restore_last_profile] get_game_profile failed for id={}", profile_id);
                 }
             }
-        } else {
-            #[cfg(debug_assertions)]
-            eprintln!("[restore_last_profile] get_app_state failed");
         }
 
         // Se não restaurou perfil, tenta detectar jogo rodando
-        #[cfg(debug_assertions)]
-        println!("[restore_last_profile] falling back to try_auto_detect_running_game");
         self.try_auto_detect_running_game();
     }
 

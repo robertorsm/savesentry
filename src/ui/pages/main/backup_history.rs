@@ -17,14 +17,9 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
         }
 
         if state.backup_history.is_empty() {
-            let dir_text = if let Some(ref p) = state.active_profile {
-                format!("Dir: {}", p.backup_dir)
-            } else {
-                format!("Dir: {}", state.config.backup_dir)
-            };
             ui.add_space(8.0);
             ui.label(egui::RichText::new("Nenhum backup").weak());
-            ui.label(egui::RichText::new(dir_text).weak().size(9.0));
+            ui.label(egui::RichText::new("Inicie o monitoramento").weak());
             ui.add_space(8.0);
         }
     }
