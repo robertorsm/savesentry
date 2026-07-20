@@ -10,85 +10,45 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
         return;
     }
 
-    // Extrai dados do perfil para evitar borrow conflicts com state mutável depois
     let profile_data = state.active_profile.as_ref().map(|p| {
-        (
-            p.is_active,
-            p.backup_delay_minutes,
-            p.backup_max_count,
-            p.process_name.clone(),
-            p.save_path.clone(),
-            p.backup_dir.clone(),
-        )
+        (p.is_active, p.backup_delay_minutes, p.backup_max_count)
     });
 
     let has_file = !state.current_save_file.is_empty();
 
-    if has_file {
-        let filename = state
-            .current_save_file
-            .split(&['/', '\\'][..])
-            .next_back()
-            .unwrap_or("(desconhecido)");
-
-        ui.horizontal(|ui| {
+    ui.horizontal(|ui| {
+        if has_file {
+            let filename = state
+                .current_save_file
+                .split(&['/', '\\'][..])
+                .next_back()
+                .unwrap_or("(desconhecido)");
             ui.label("Arquivo:");
             ui.label(egui::RichText::new(filename).strong().size(13.0))
                 .on_hover_text(&state.current_save_file);
-        });
-    } else {
-        ui.horizontal(|ui| {
+        } else {
             ui.label(
                 egui::RichText::new("(nenhum arquivo encontrado no padrão)")
                     .weak()
                     .size(11.0)
                     .color(egui::Color32::from_rgb(200, 150, 80)),
             );
-        });
-    }
+        }
 
-    ui.add_space(2.0);
-
-    if let Some(modified) = state.current_save_modified {
-        let datetime = chrono::DateTime::<chrono::Local>::from(modified);
-        ui.horizontal(|ui| {
+        if let Some(modified) = state.current_save_modified {
+            ui.add_space(16.0);
+            let datetime = chrono::DateTime::<chrono::Local>::from(modified);
             ui.label("Modificado:");
             ui.label(egui::RichText::new(datetime.format("%d/%m/%Y %H:%M").to_string()).weak());
-        });
-    }
+        }
+    });
 
-    if let Some((is_active, delay_minutes, max_count, process_name, save_path, backup_dir)) =
-        profile_data
-    {
+    if let Some((is_active, delay_minutes, max_count)) = profile_data {
         if is_active {
-            ui.add_space(6.0);
-            ui.separator();
-            ui.add_space(4.0);
-
-            if let Some(ref watcher) = state.active_watcher {
-                if let Some(remaining) = watcher.remaining_backup_seconds(delay_minutes) {
-                    let mins = remaining / 60;
-                    let secs = remaining % 60;
-                    let label = if remaining == 0 {
-                        "Pronto para backup".to_string()
-                    } else {
-                        format!("Próximo backup em: {:02}:{:02}", mins, secs)
-                    };
-                    ui.horizontal(|ui| {
-                        ui.label("Próximo save:");
-                        ui.label(
-                            egui::RichText::new(label)
-                                .strong()
-                                .color(if remaining == 0 {
-                                    egui::Color32::from_rgb(100, 220, 100)
-                                } else {
-                                    egui::Color32::from_rgb(220, 180, 80)
-                                })
-                                .size(14.0),
-                        );
-                    });
-                }
-            }
+            let remaining = state
+                .active_watcher
+                .as_ref()
+                .and_then(|w| w.remaining_backup_seconds(delay_minutes));
 
             state.reload_backup_history();
             let backup_count = state.backup_history.len();
@@ -98,7 +58,34 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
             } else {
                 egui::Color32::from_rgb(180, 180, 180)
             };
+
+            ui.add_space(6.0);
+            ui.separator();
+            ui.add_space(4.0);
+
             ui.horizontal(|ui| {
+                if let Some(remaining) = remaining {
+                    let mins = remaining / 60;
+                    let secs = remaining % 60;
+                    let label = if remaining == 0 {
+                        "Pronto".to_string()
+                    } else {
+                        format!("{:02}:{:02}", mins, secs)
+                    };
+                    ui.label("Próximo backup:");
+                    ui.label(
+                        egui::RichText::new(label)
+                            .strong()
+                            .color(if remaining == 0 {
+                                egui::Color32::from_rgb(100, 220, 100)
+                            } else {
+                                egui::Color32::from_rgb(220, 180, 80)
+                            })
+                            .size(14.0),
+                    );
+                }
+
+                ui.add_space(16.0);
                 ui.label("Backups:");
                 ui.label(
                     egui::RichText::new(format!("{} / {}", backup_count, max_count))
@@ -106,52 +93,24 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
                         .color(count_color)
                         .size(14.0),
                 );
-            });
 
-            ui.horizontal(|ui| {
+                ui.add_space(16.0);
                 ui.label("Intervalo:");
-                ui.label(
-                    egui::RichText::new(format!("{} min", delay_minutes)).weak(),
-                );
-            });
-            ui.horizontal(|ui| {
-                ui.label("Backups em:");
-                ui.label(egui::RichText::new(&backup_dir).weak())
-                    .on_hover_text(&backup_dir);
+                ui.label(egui::RichText::new(format!("{} min", delay_minutes)).weak());
             });
 
-            ui.add_space(4.0);
-            ui.separator();
-            ui.add_space(2.0);
-
-            if let Some(ref process) = process_name {
+            if state.active_watcher.is_some() {
+                ui.add_space(4.0);
                 ui.horizontal(|ui| {
-                    ui.label("Processo:");
-                    ui.label(egui::RichText::new(process).strong().size(12.0))
-                        .on_hover_text("Processo monitorado");
+                    ui.spinner();
+                    ui.label(
+                        egui::RichText::new("Aguardando alterações...")
+                            .italics()
+                            .weak(),
+                    );
                 });
             }
-
-            ui.horizontal(|ui| {
-                ui.label("Save em:");
-                ui.label(egui::RichText::new(&save_path).weak().size(11.0))
-                    .on_hover_text("Diretório do save");
-            });
         }
-    }
-
-    if state.active_watcher.is_some() {
-        ui.add_space(4.0);
-        ui.separator();
-        ui.add_space(2.0);
-        ui.horizontal(|ui| {
-            ui.spinner();
-            ui.label(
-                egui::RichText::new("Aguardando alterações...")
-                    .italics()
-                    .weak(),
-            );
-        });
     }
 
     let target_backup = state
