@@ -19,6 +19,7 @@ pub struct FileWatcher {
     last_backup_time: Arc<AtomicU64>,
     backup_max_count: u32,
     backup_recursive: bool,
+    pending: bool,
 }
 
 impl FileWatcher {
@@ -46,7 +47,18 @@ impl FileWatcher {
             last_backup_time,
             backup_max_count,
             backup_recursive,
+            pending: false,
         }
+    }
+
+    /// Marca que houve modificação pendente de backup
+    pub fn set_pending(&mut self, value: bool) {
+        self.pending = value;
+    }
+
+    /// Verifica se há modificação pendente aguardando backup
+    pub fn has_pending(&self) -> bool {
+        self.pending
     }
 
     /// Verifica se um arquivo deve ser excluído do backup
