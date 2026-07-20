@@ -114,6 +114,10 @@ impl AppState {
                         }
                     }
                 } else {
+                    self.config.backup_dir = profile.backup_dir.clone();
+                    self.invalidate_backup_cache();
+                    self.selected_backup_filename = None;
+                    self.reload_backup_history();
                     self.success_message = Some(format!(
                         "Template '{}' selecionado — aguardando '{}'",
                         template_name, proc_name
@@ -360,15 +364,37 @@ impl AppState {
     }
 }
 
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+static PROCESS_CHECK_CACHE: Mutex<Option<(Instant, String, bool)>> = Mutex::new(None);
+
 pub(crate) fn is_process_running(name: &str) -> bool {
+    let target = name.to_lowercase();
+
+    {
+        let cache = PROCESS_CHECK_CACHE.lock().unwrap();
+        if let Some((timestamp, cached_name, result)) = cache.as_ref() {
+            if *cached_name == target && timestamp.elapsed() < Duration::from_secs(1) {
+                return *result;
+            }
+        }
+    }
+
     use sysinfo::{ProcessesToUpdate, System};
     let mut system = System::new();
     system.refresh_processes(ProcessesToUpdate::All, true);
-    let target = name.to_lowercase();
-    system
+    let result = system
         .processes()
         .values()
-        .any(|p| p.name().to_string_lossy().to_lowercase() == target)
+        .any(|p| p.name().to_string_lossy().to_lowercase() == target);
+
+    {
+        let mut cache = PROCESS_CHECK_CACHE.lock().unwrap();
+        *cache = Some((Instant::now(), target, result));
+    }
+
+    result
 }
 
 /// Extrai todos os arquivos de um ZIP para o diretório de destino

@@ -26,7 +26,8 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
     if !state.backup_history.is_empty() {
         let mut clicked_restore: Option<String> = None;
         let mut delete_backup: Option<String> = None;
-        let backup_dir = std::path::Path::new(&state.config.backup_dir);
+        let backup_dir_str = state.get_backup_dir();
+        let backup_dir = std::path::Path::new(&backup_dir_str);
 
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
