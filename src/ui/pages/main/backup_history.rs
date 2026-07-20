@@ -11,11 +11,20 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
     ui.add_space(4.0);
 
     if state.backup_history.is_empty() {
-        ui.add_space(8.0);
-        ui.label(egui::RichText::new("Nenhum backup").weak());
-        ui.label(egui::RichText::new("Inicie o monitoramento").weak());
-        ui.add_space(8.0);
-    } else {
+        if state.active_profile.is_some() || !state.config.backup_dir.is_empty() {
+            state.invalidate_backup_cache();
+            state.reload_backup_history();
+        }
+
+        if state.backup_history.is_empty() {
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new("Nenhum backup").weak());
+            ui.label(egui::RichText::new("Inicie o monitoramento").weak());
+            ui.add_space(8.0);
+        }
+    }
+
+    if !state.backup_history.is_empty() {
         let mut clicked_restore: Option<String> = None;
         let backup_dir = std::path::Path::new(&state.config.backup_dir);
 
