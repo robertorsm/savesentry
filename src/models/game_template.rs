@@ -14,6 +14,8 @@ pub struct GameTemplate {
     pub version: i32,
     pub is_official: bool, // Template oficial ou customizado
     pub created_at: String,
+    pub expanded_save_directory: Option<String>,
+    pub expanded_backup_directory: Option<String>,
 }
 
 /// Base constante para conversão AccountID → SteamID64
@@ -216,10 +218,23 @@ impl GameTemplate {
     }
 
     pub fn expand_save_directory(&self) -> String {
-        Self::expand_path(&self.save_directory)
+        self.expanded_save_directory
+            .clone()
+            .unwrap_or_else(|| Self::expand_path(&self.save_directory))
     }
 
     pub fn expand_backup_directory(&self) -> String {
-        Self::expand_path(&self.backup_dir)
+        self.expanded_backup_directory
+            .clone()
+            .unwrap_or_else(|| Self::expand_path(&self.backup_dir))
+    }
+
+    pub fn ensure_expanded(&mut self) {
+        if self.expanded_save_directory.is_none() {
+            self.expanded_save_directory = Some(Self::expand_path(&self.save_directory));
+        }
+        if self.expanded_backup_directory.is_none() {
+            self.expanded_backup_directory = Some(Self::expand_path(&self.backup_dir));
+        }
     }
 }

@@ -103,8 +103,10 @@ impl AppState {
         // Inicializa banco de dados
         let db = crate::db::Database::new(&db_path).expect("Falha ao inicializar banco de dados");
 
-        // Carrega templates existentes
-        let templates = db.list_game_templates().unwrap_or_default();
+        let mut templates = db.list_game_templates().unwrap_or_default();
+        for t in &mut templates {
+            t.ensure_expanded();
+        }
 
         let mut state = Self {
             db,
@@ -223,9 +225,9 @@ impl AppState {
         self.backup_history_last_reload = Some(std::time::Instant::now());
     }
 
-    /// Invalida o cache de backup history (forçar reload no próximo acesso)
     pub fn invalidate_backup_cache(&mut self) {
         self.backup_history_last_reload = None;
+        self.backup_history.clear();
     }
 
     fn find_latest_save(&self) -> Option<(std::path::PathBuf, std::time::SystemTime)> {
@@ -371,9 +373,12 @@ impl AppState {
         self.template_form.original_backup_max_count = 50;
     }
 
-    /// Recarrega lista de templates do banco
     pub fn reload_templates(&mut self) {
-        self.templates = self.db.list_game_templates().unwrap_or_default();
+        let mut templates = self.db.list_game_templates().unwrap_or_default();
+        for t in &mut templates {
+            t.ensure_expanded();
+        }
+        self.templates = templates;
     }
 
     fn restore_last_profile(&mut self) {
