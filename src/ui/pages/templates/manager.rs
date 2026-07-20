@@ -273,7 +273,9 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                 ui.label("• Padrões: *.sav, *.dat, save*.*");
                 ui.label("• Exclusão: *.tmp, *.bak, autosave*");
                 ui.label("• Backup Delay: intervalo mínimo entre backups (em minutos)");
-                ui.label("• Máx. Backups: número máximo de backups a manter (mais antigo é excluído)");
+                ui.label(
+                    "• Máx. Backups: número máximo de backups a manter (mais antigo é excluído)",
+                );
             });
         });
 }

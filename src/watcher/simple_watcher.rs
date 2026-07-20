@@ -123,7 +123,8 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                 let now = std::time::Instant::now();
                 if d <= now {
                     // Deadline expirou: dispara backup apenas se houve modificação
-                    if should_process && file_watcher.has_pending() && file_watcher.should_backup() {
+                    if should_process && file_watcher.has_pending() && file_watcher.should_backup()
+                    {
                         #[cfg(debug_assertions)]
                         match file_watcher.create_backup(&save_path) {
                             Ok(backup_path) => {
@@ -203,7 +204,8 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // Timeout expirou: dispara backup apenas se houve modificação pendente
-                    if should_process && file_watcher.has_pending() && file_watcher.should_backup() {
+                    if should_process && file_watcher.has_pending() && file_watcher.should_backup()
+                    {
                         #[cfg(debug_assertions)]
                         match file_watcher.create_backup(&save_path) {
                             Ok(backup_path) => {

@@ -84,8 +84,7 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                         let pointer = &i.pointer;
                         if let Some(pos) = pointer.interact_pos() {
                             if pointer.primary_clicked() && response.rect.contains(pos) {
-                                let on_button =
-                                    button_rect.is_some_and(|r| r.contains(pos));
+                                let on_button = button_rect.is_some_and(|r| r.contains(pos));
                                 return !on_button;
                             }
                         }
