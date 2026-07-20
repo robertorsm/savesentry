@@ -29,7 +29,7 @@ impl eframe::App for App {
     fn logic(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         let now = std::time::Instant::now();
 
-        if self.state.last_ui_update.elapsed() >= std::time::Duration::from_millis(500) {
+        if self.state.last_ui_update.elapsed() >= std::time::Duration::from_millis(1000) {
             self.state.last_ui_update = now;
             self.state.update_save_info();
 
@@ -48,9 +48,7 @@ impl eframe::App for App {
             }
         }
 
-        if self.state.active_watcher.is_some() {
-            ctx.request_repaint_after(std::time::Duration::from_secs(1));
-        }
+
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {

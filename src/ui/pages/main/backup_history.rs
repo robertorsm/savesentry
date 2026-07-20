@@ -12,7 +12,6 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
 
     if state.backup_history.is_empty() {
         if state.active_profile.is_some() || !state.config.backup_dir.is_empty() {
-            state.invalidate_backup_cache();
             state.reload_backup_history();
         }
 
