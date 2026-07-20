@@ -22,6 +22,7 @@ pub struct TemplateForm {
     pub save_dir: String,
     pub backup_dir: String,
     pub backup_delay_minutes: u32,
+    pub backup_max_count: u32,
     pub process: String,
     pub pattern: String,
     pub exclude: String,
@@ -32,6 +33,7 @@ pub struct TemplateForm {
     pub original_pattern: String,
     pub original_exclude: String,
     pub original_backup_delay_minutes: u32,
+    pub original_backup_max_count: u32,
 }
 
 /// Estado da aplicação (single profile com auto-restore do último usado)
@@ -127,6 +129,7 @@ impl AppState {
                 save_dir: String::new(),
                 backup_dir: String::new(),
                 backup_delay_minutes: 5,
+                backup_max_count: 50,
                 process: String::new(),
                 pattern: String::from("*.*"),
                 exclude: String::new(),
@@ -137,6 +140,7 @@ impl AppState {
                 original_pattern: String::new(),
                 original_exclude: String::new(),
                 original_backup_delay_minutes: 5,
+                original_backup_max_count: 50,
             },
             restart_monitoring_after: None,
             last_seen_backup_time: 0,
@@ -350,6 +354,7 @@ impl AppState {
         self.template_form.save_dir.clear();
         self.template_form.backup_dir.clear();
         self.template_form.backup_delay_minutes = 5;
+        self.template_form.backup_max_count = 50;
         self.template_form.process.clear();
         self.template_form.pattern = String::from("*.*");
         self.template_form.exclude.clear();
@@ -360,6 +365,7 @@ impl AppState {
         self.template_form.original_pattern.clear();
         self.template_form.original_exclude.clear();
         self.template_form.original_backup_delay_minutes = 5;
+        self.template_form.original_backup_max_count = 50;
     }
 
     /// Recarrega lista de templates do banco

@@ -61,7 +61,7 @@ impl Database {
     /// Lista todos os templates de jogos
     pub fn list_game_templates(&self) -> Result<Vec<crate::models::GameTemplate>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, save_directory, process_name, save_pattern, exclude_pattern, default_exclude_pattern, backup_dir, backup_delay_minutes, version, is_official, created_at 
+            "SELECT id, name, save_directory, process_name, save_pattern, exclude_pattern, default_exclude_pattern, backup_dir, backup_delay_minutes, backup_max_count, version, is_official, created_at 
              FROM game_templates ORDER BY name ASC",
         )?;
 
@@ -77,9 +77,10 @@ impl Database {
                     default_exclude_pattern: row.get(6)?,
                     backup_dir: row.get(7)?,
                     backup_delay_minutes: row.get(8)?,
-                    version: row.get(9)?,
-                    is_official: row.get::<_, i32>(10)? != 0,
-                    created_at: row.get(11)?,
+                    backup_max_count: row.get::<_, Option<u32>>(9)?.unwrap_or(50),
+                    version: row.get(10)?,
+                    is_official: row.get::<_, i32>(11)? != 0,
+                    created_at: row.get(12)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -99,10 +100,11 @@ impl Database {
         default_exclude_pattern: Option<&str>,
         backup_dir: &str,
         backup_delay_minutes: u32,
+        backup_max_count: u32,
     ) -> Result<i64> {
         self.conn.execute(
-            "INSERT INTO game_templates (name, save_directory, process_name, save_pattern, exclude_pattern, default_exclude_pattern, backup_dir, backup_delay_minutes, version, is_official, created_at) 
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1, 0, datetime('now'))",
+            "INSERT INTO game_templates (name, save_directory, process_name, save_pattern, exclude_pattern, default_exclude_pattern, backup_dir, backup_delay_minutes, backup_max_count, version, is_official, created_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1, 0, datetime('now'))",
             rusqlite::params![
                 name,
                 save_directory,
@@ -112,6 +114,7 @@ impl Database {
                 default_exclude_pattern,
                 backup_dir,
                 backup_delay_minutes,
+                backup_max_count,
             ],
         )?;
         Ok(self.conn.last_insert_rowid())
@@ -130,11 +133,12 @@ impl Database {
         default_exclude_pattern: Option<&str>,
         backup_dir: &str,
         backup_delay_minutes: u32,
+        backup_max_count: u32,
     ) -> Result<()> {
         self.conn.execute(
             "UPDATE game_templates 
-             SET name = ?1, save_directory = ?2, process_name = ?3, save_pattern = ?4, exclude_pattern = ?5, default_exclude_pattern = ?6, backup_dir = ?7, backup_delay_minutes = ?8, version = version + 1 
-             WHERE id = ?9",
+             SET name = ?1, save_directory = ?2, process_name = ?3, save_pattern = ?4, exclude_pattern = ?5, default_exclude_pattern = ?6, backup_dir = ?7, backup_delay_minutes = ?8, backup_max_count = ?9, version = version + 1 
+             WHERE id = ?10",
             rusqlite::params![
                 name,
                 save_directory,
@@ -144,6 +148,7 @@ impl Database {
                 default_exclude_pattern,
                 backup_dir,
                 backup_delay_minutes,
+                backup_max_count,
                 id,
             ],
         )?;

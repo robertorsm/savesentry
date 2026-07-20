@@ -122,8 +122,9 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
             let recv_result = if let Some(d) = deadline {
                 let now = std::time::Instant::now();
                 if d <= now {
-                    // Deadline expirou: dispara backup
-                    if should_process && file_watcher.should_backup() {
+                    // Deadline expirou: dispara backup apenas se houve modificação
+                    if should_process && file_watcher.has_pending() && file_watcher.should_backup()
+                    {
                         #[cfg(debug_assertions)]
                         match file_watcher.create_backup(&save_path) {
                             Ok(backup_path) => {
@@ -142,6 +143,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                         if let Ok(backup_path) = file_watcher.create_backup(&save_path) {
                             last_backup_path = Some(backup_path);
                         }
+                        file_watcher.set_pending(false);
                     }
                     deadline = None;
                     continue;
@@ -191,6 +193,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                             if has_relevant_event {
                                 // Reseta deadline (sliding debounce)
                                 deadline = Some(std::time::Instant::now() + debounce_duration);
+                                file_watcher.set_pending(true);
                             }
                         }
                         Err(_e) => {
@@ -200,8 +203,9 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    // Timeout expirou sem eventos: dispara backup
-                    if should_process && file_watcher.should_backup() {
+                    // Timeout expirou: dispara backup apenas se houve modificação pendente
+                    if should_process && file_watcher.has_pending() && file_watcher.should_backup()
+                    {
                         #[cfg(debug_assertions)]
                         match file_watcher.create_backup(&save_path) {
                             Ok(backup_path) => {
@@ -220,6 +224,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                         if let Ok(backup_path) = file_watcher.create_backup(&save_path) {
                             last_backup_path = Some(backup_path);
                         }
+                        file_watcher.set_pending(false);
                     }
                     deadline = None;
                 }

@@ -10,6 +10,7 @@ pub struct GameTemplate {
     pub default_exclude_pattern: Option<String>, // Padrão built-in de exclusão automático
     pub backup_dir: String,     // Diretório de backup para este template
     pub backup_delay_minutes: u32, // Intervalo mínimo entre backups (em minutos)
+    pub backup_max_count: u32,  // Número máximo de backups a manter
     pub version: i32,
     pub is_official: bool, // Template oficial ou customizado
     pub created_at: String,
