@@ -62,17 +62,18 @@ impl eframe::App for App {
             }
         }
 
-        if self.state.active_watcher.is_some()
-            || (self.state.active_profile.is_some()
-                && self
-                    .state
-                    .active_profile
-                    .as_ref()
-                    .unwrap()
-                    .process_name
-                    .is_some())
-        {
+        if self.state.active_watcher.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_secs(1));
+        } else if self.state.active_profile.is_some()
+            && self
+                .state
+                .active_profile
+                .as_ref()
+                .unwrap()
+                .process_name
+                .is_some()
+        {
+            ctx.request_repaint_after(std::time::Duration::from_secs(2));
         }
     }
 
