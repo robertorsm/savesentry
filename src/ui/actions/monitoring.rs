@@ -98,6 +98,9 @@ impl AppState {
                     match crate::watcher::start_watching(profile) {
                         Ok(handle) => {
                             self.active_watcher = Some(handle);
+                            if let Some(ref mut active_profile) = self.active_profile {
+                                active_profile.is_active = true;
+                            }
                             self.success_message = Some(format!(
                                 "Template '{}' selecionado — monitoramento ativo",
                                 template_name
