@@ -50,7 +50,6 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
                 .as_ref()
                 .and_then(|w| w.remaining_backup_seconds(delay_minutes));
 
-            state.reload_backup_history();
             let backup_count = state.backup_history.len();
             let max_count = max_count as usize;
             let count_color = if backup_count >= max_count {
@@ -102,7 +101,6 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
             if state.active_watcher.is_some() {
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
-                    ui.spinner();
                     ui.label(
                         egui::RichText::new("Aguardando alterações...")
                             .italics()

@@ -81,6 +81,8 @@ impl Database {
                     version: row.get(10)?,
                     is_official: row.get::<_, i32>(11)? != 0,
                     created_at: row.get(12)?,
+                    expanded_save_directory: None,
+                    expanded_backup_directory: None,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;

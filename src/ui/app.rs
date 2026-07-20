@@ -20,7 +20,7 @@ impl App {
         let db_path = exe_dir.join("savesentry.db");
 
         Self {
-            state: AppState::new(db_path),
+            state: AppState::new(db_path, _cc.egui_ctx.clone()),
         }
     }
 }
@@ -29,12 +29,22 @@ impl eframe::App for App {
     fn logic(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         let now = std::time::Instant::now();
 
-        if self.state.last_ui_update.elapsed() >= std::time::Duration::from_millis(500) {
+        if self.state.last_ui_update.elapsed() >= std::time::Duration::from_millis(1000) {
             self.state.last_ui_update = now;
             self.state.update_save_info();
 
             if self.state.check_backup_updates() {
                 ctx.request_repaint();
+            }
+
+            if self.state.active_watcher.is_none() {
+                if let Some(ref profile) = self.state.active_profile {
+                    if let Some(ref proc_name) = profile.process_name {
+                        if crate::ui::actions::monitoring::is_process_running(proc_name) {
+                            self.state.start_monitoring();
+                        }
+                    }
+                }
             }
         }
 
@@ -43,13 +53,34 @@ impl eframe::App for App {
                 self.state.restart_monitoring_after = None;
                 self.state.start_monitoring();
                 ctx.request_repaint();
-            } else {
-                ctx.request_repaint_after(std::time::Duration::from_secs(1));
+            }
+        }
+
+        if let Some(expires) = self.state.message_expires_at {
+            if expires <= now {
+                self.state.clear_messages();
+                ctx.request_repaint();
+            }
+        }
+
+        if let Some(ref watcher) = self.state.active_watcher {
+            if !watcher.process_running.load(std::sync::atomic::Ordering::Relaxed) {
+                self.state.stop_monitoring();
             }
         }
 
         if self.state.active_watcher.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_secs(1));
+        } else if self.state.active_profile.is_some()
+            && self
+                .state
+                .active_profile
+                .as_ref()
+                .unwrap()
+                .process_name
+                .is_some()
+        {
+            ctx.request_repaint_after(std::time::Duration::from_secs(2));
         }
     }
 

@@ -1,12 +1,26 @@
 use crate::models::GameProfile;
 use crate::watcher::file_watcher::FileWatcher;
-use crate::watcher::process_monitor::{ProcessMonitor, ProcessState};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::SystemTime;
+
+#[cfg(windows)]
+mod winapi {
+    use std::ffi::c_void;
+
+    pub const SYNCHRONIZE: u32 = 0x00100000;
+    pub const INFINITE: u32 = 0xFFFFFFFF;
+
+
+    extern "system" {
+        pub fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> *mut c_void;
+        pub fn WaitForSingleObject(hHandle: *mut c_void, dwMilliseconds: u32) -> u32;
+        pub fn CloseHandle(hObject: *mut c_void) -> i32;
+    }
+}
 
 /// Handle para controlar um watcher em background
 pub struct WatcherHandle {
@@ -16,6 +30,7 @@ pub struct WatcherHandle {
     _process_monitor_handle: Option<thread::JoinHandle<()>>,
     last_backup_time: Arc<AtomicU64>,
     pub recent_save: Arc<Mutex<Option<(String, SystemTime)>>>,
+    pub process_running: Arc<AtomicBool>,
 }
 
 impl WatcherHandle {
@@ -48,7 +63,10 @@ impl WatcherHandle {
 }
 
 /// Inicia o monitoramento de um perfil em background
-pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std::error::Error>> {
+pub fn start_watching(
+    profile: GameProfile,
+    ctx: eframe::egui::Context,
+) -> Result<WatcherHandle, Box<dyn std::error::Error>> {
     let profile_id = profile.id;
     let _profile_name = profile.name.clone();
     let _profile_name_for_monitor = _profile_name.clone(); // Clone para usar na segunda closure
@@ -58,6 +76,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
     let exclude_pattern = profile.exclude_pattern.clone();
     let save_pattern = profile.save_pattern.clone();
     let process_name = profile.process_name.clone();
+    let ctx_clone = ctx.clone();
 
     // Flag compartilhada: indica se deve monitorar arquivo
     // Se process_name existe, começar desabilitado até processo ser detectado
@@ -69,6 +88,9 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
 
     let recent_save = Arc::new(Mutex::new(None));
     let recent_save_clone = Arc::clone(&recent_save);
+
+    let process_running = Arc::new(AtomicBool::new(true));
+    let process_running_clone = Arc::clone(&process_running);
 
     // Thread de file watching
     let file_watcher_handle = thread::spawn(move || {
@@ -133,6 +155,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                                     backup_path, _profile_name
                                 );
                                 last_backup_path = Some(backup_path);
+                                ctx_clone.request_repaint();
                             }
                             Err(e) => {
                                 eprintln!("❌ Erro ao criar backup para {}: {}", _profile_name, e);
@@ -142,6 +165,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                         #[cfg(not(debug_assertions))]
                         if let Ok(backup_path) = file_watcher.create_backup(&save_path) {
                             last_backup_path = Some(backup_path);
+                            ctx_clone.request_repaint();
                         }
                         file_watcher.set_pending(false);
                     }
@@ -214,6 +238,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                                     backup_path, _profile_name
                                 );
                                 last_backup_path = Some(backup_path);
+                                ctx_clone.request_repaint();
                             }
                             Err(e) => {
                                 eprintln!("❌ Erro ao criar backup para {}: {}", _profile_name, e);
@@ -223,6 +248,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                         #[cfg(not(debug_assertions))]
                         if let Ok(backup_path) = file_watcher.create_backup(&save_path) {
                             last_backup_path = Some(backup_path);
+                            ctx_clone.request_repaint();
                         }
                         file_watcher.set_pending(false);
                     }
@@ -246,12 +272,11 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
         );
     });
 
-    // Thread de monitoramento de processo (opcional)
     let process_monitor_handle = if let Some(proc_name) = process_name {
         let should_monitor_clone = Arc::clone(&should_monitor);
 
         Some(thread::spawn(move || {
-            let mut monitor = ProcessMonitor::new(proc_name.clone());
+            let proc_name_lower = proc_name.to_lowercase();
 
             #[cfg(debug_assertions)]
             println!(
@@ -260,32 +285,58 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
             );
 
             loop {
-                let state = monitor.check_process();
-                let poll_interval = monitor.get_poll_interval();
+                use sysinfo::{ProcessesToUpdate, System};
 
-                // Atualiza flag de monitoramento baseado no estado do processo
-                match state {
-                    ProcessState::Running => {
-                        #[cfg(debug_assertions)]
-                        println!(
-                            "🎮 Processo {} detectado! Iniciando monitoramento de arquivo",
-                            proc_name
-                        );
+                let mut system = System::new();
+                system.refresh_processes(ProcessesToUpdate::All, true);
 
-                        should_monitor_clone.store(true, Ordering::Relaxed);
-                    }
-                    ProcessState::Stopped => {
-                        #[cfg(debug_assertions)]
-                        println!("⛔ Processo {} fechado. Pausando monitoramento", proc_name);
+                let found = system.processes().values().find(|p| {
+                    p.name().to_string_lossy().to_lowercase() == proc_name_lower
+                });
 
-                        should_monitor_clone.store(false, Ordering::Relaxed);
+                if let Some(process) = found {
+                    let pid = process.pid().as_u32();
+
+                    #[cfg(debug_assertions)]
+                    println!(
+                        "🎮 Processo {} detectado (PID {}). Iniciando monitoramento de arquivo",
+                        proc_name, pid
+                    );
+
+                    should_monitor_clone.store(true, Ordering::Relaxed);
+
+                    #[cfg(windows)]
+                    unsafe {
+                        let handle = winapi::OpenProcess(winapi::SYNCHRONIZE, 0, pid);
+                        if !handle.is_null() {
+                            winapi::WaitForSingleObject(handle, winapi::INFINITE);
+                            winapi::CloseHandle(handle);
+                        }
                     }
-                    ProcessState::Waiting => {
-                        // Continue esperando
+
+                    #[cfg(not(windows))]
+                    {
+                        loop {
+                            thread::sleep(std::time::Duration::from_secs(5));
+                            let mut sys = sysinfo::System::new();
+                            sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+                            if !sys.processes().values().any(|p| {
+                                p.name().to_string_lossy().to_lowercase() == proc_name_lower
+                            }) {
+                                break;
+                            }
+                        }
                     }
+
+                    #[cfg(debug_assertions)]
+                    println!("⛔ Processo {} fechado. Parando monitoramento", proc_name);
+
+                    should_monitor_clone.store(false, Ordering::Relaxed);
+                    process_running_clone.store(false, Ordering::Relaxed);
+                    ctx.request_repaint();
                 }
 
-                thread::sleep(poll_interval);
+                thread::sleep(std::time::Duration::from_secs(2));
             }
         }))
     } else {
@@ -298,5 +349,6 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
         _process_monitor_handle: process_monitor_handle,
         last_backup_time,
         recent_save,
+        process_running,
     })
 }

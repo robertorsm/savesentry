@@ -91,11 +91,11 @@ impl AppState {
             self.current_save_file.clear();
             self.update_save_info();
 
-            self.success_message = Some(format!("Template '{}' selecionado", template_name));
+            self.set_success_message(format!("Template '{}' selecionado", template_name));
 
             if let Some(ref proc_name) = profile.process_name {
                 if is_process_running(proc_name) {
-                    match crate::watcher::start_watching(profile) {
+                    match crate::watcher::start_watching(profile, self.egui_ctx.clone()) {
                         Ok(handle) => {
                             self.active_watcher = Some(handle);
                             if let Some(ref mut active_profile) = self.active_profile {
@@ -103,7 +103,7 @@ impl AppState {
                             }
                             self.invalidate_backup_cache();
                             self.reload_backup_history();
-                            self.success_message = Some(format!(
+                            self.set_success_message(format!(
                                 "Template '{}' selecionado — monitoramento ativo",
                                 template_name
                             ));
@@ -114,14 +114,18 @@ impl AppState {
                         }
                     }
                 } else {
-                    self.success_message = Some(format!(
-                        "Template '{}' selecionado — aguardando '{}'",
-                        template_name, proc_name
-                    ));
+                    self.config.backup_dir = profile.backup_dir.clone();
+                    self.invalidate_backup_cache();
+                    self.selected_backup_filename = None;
+                    self.reload_backup_history();
+            self.set_success_message(format!(
+                "Template '{}' selecionado — aguardando '{}'",
+                template_name, proc_name
+            ));
                 }
             }
         } else {
-            self.error_message = Some("Template não encontrado".to_string());
+            self.set_error_message("Template não encontrado".to_string());
         }
     }
 
@@ -134,13 +138,13 @@ impl AppState {
     pub fn start_monitoring(&mut self) {
         // Valida se tem perfil ativo
         if self.active_profile.is_none() {
-            self.error_message = Some("Selecione um template primeiro".to_string());
+            self.set_error_message("Selecione um template primeiro".to_string());
             return;
         }
 
         // Valida se já está monitorando
         if self.active_watcher.is_some() {
-            self.error_message = Some("Monitoramento já está ativo".to_string());
+            self.set_error_message("Monitoramento já está ativo".to_string());
             return;
         }
 
@@ -161,7 +165,7 @@ impl AppState {
                         println!("💾 Perfil salvo no banco com ID: {}", new_id);
                     }
                     Err(e) => {
-                        self.error_message = Some(format!("Erro ao salvar perfil: {}", e));
+                        self.set_error_message(format!("Erro ao salvar perfil: {}", e));
                         return;
                     }
                 }
@@ -176,16 +180,16 @@ impl AppState {
             profile.is_active = true;
 
             // Clone apenas uma vez para enviar para thread (necessário)
-            match crate::watcher::start_watching(profile.clone()) {
+            match crate::watcher::start_watching(profile.clone(), self.egui_ctx.clone()) {
                 Ok(handle) => {
                     self.active_watcher = Some(handle);
-                    self.success_message = Some("Monitoramento iniciado".to_string());
+                    self.set_success_message("Monitoramento iniciado".to_string());
                     self.invalidate_backup_cache();
                     self.update_save_info();
                     self.reload_backup_history();
                 }
                 Err(e) => {
-                    self.error_message = Some(format!("Erro ao iniciar monitoramento: {}", e));
+                    self.set_error_message(format!("Erro ao iniciar monitoramento: {}", e));
                 }
             }
         }
@@ -200,14 +204,14 @@ impl AppState {
                 profile.is_active = false;
             }
 
-            self.success_message = Some("Monitoramento parado".to_string());
+            self.set_success_message("Monitoramento parado".to_string());
         }
     }
 
     /// Restaura um backup
     pub fn restore_backup(&mut self, filename: &str) {
         if self.current_save_path.is_empty() {
-            self.error_message = Some("Configuração incompleta".to_string());
+            self.set_error_message("Configuração incompleta".to_string());
             return;
         }
 
@@ -215,12 +219,12 @@ impl AppState {
         let backup_dir = if let Some(ref profile) = self.active_profile {
             profile.backup_dir.clone()
         } else {
-            self.error_message = Some("Nenhum perfil ativo".to_string());
+            self.set_error_message("Nenhum perfil ativo".to_string());
             return;
         };
 
         if backup_dir.is_empty() {
-            self.error_message = Some("Diretório de backup não configurado".to_string());
+            self.set_error_message("Diretório de backup não configurado".to_string());
             return;
         }
 
@@ -240,7 +244,7 @@ impl AppState {
         // Extrai o ZIP
         match extract_zip(&backup_path, &self.current_save_path) {
             Ok(_) => {
-                self.success_message = Some(format!("Backup '{}' restaurado", filename));
+                self.set_success_message(format!("Backup '{}' restaurado", filename));
                 self.update_save_info();
 
                 // Reinicia monitoramento se estava ativo
@@ -251,8 +255,56 @@ impl AppState {
                 }
             }
             Err(e) => {
-                self.error_message = Some(format!("Erro ao restaurar: {}", e));
+                self.set_error_message(format!("Erro ao restaurar: {}", e));
             }
+        }
+    }
+
+    /// Exclui um backup permanentemente (arquivo ZIP e screenshot PNG)
+    pub fn delete_backup(&mut self, filename: &str) {
+        let backup_dir = if let Some(ref profile) = self.active_profile {
+            profile.backup_dir.clone()
+        } else {
+            self.config.backup_dir.clone()
+        };
+
+        if backup_dir.is_empty() {
+            self.set_error_message("Diretório de backup não configurado".to_string());
+            return;
+        }
+
+        let backup_dir_path = std::path::Path::new(&backup_dir);
+        let zip_path = backup_dir_path.join(filename);
+        let png_path = backup_dir_path.join(filename).with_extension("png");
+
+        let mut deleted_any = false;
+
+        if zip_path.exists() {
+            if let Err(e) = std::fs::remove_file(&zip_path) {
+                self.set_error_message(format!("Erro ao excluir backup: {}", e));
+                return;
+            }
+            deleted_any = true;
+        }
+
+        if png_path.exists() {
+            if let Err(e) = std::fs::remove_file(&png_path) {
+                self.set_error_message(format!("Erro ao excluir screenshot: {}", e));
+                return;
+            }
+            deleted_any = true;
+        }
+
+        if deleted_any {
+            if self.selected_backup_filename.as_deref() == Some(filename) {
+                self.selected_backup_filename = None;
+            }
+            self.screenshot_textures.remove(filename);
+            self.invalidate_backup_cache();
+            self.reload_backup_history();
+            self.set_success_message(format!("Backup '{}' excluído", filename));
+        } else {
+            self.set_error_message("Backup não encontrado".to_string());
         }
     }
 
@@ -304,7 +356,7 @@ impl AppState {
             false,
         )?;
 
-        self.success_message = Some(format!("Safety backup '{}' criado", safety_name));
+        self.set_success_message(format!("Safety backup '{}' criado", safety_name));
         self.invalidate_backup_cache();
         self.reload_backup_history();
 
@@ -312,15 +364,37 @@ impl AppState {
     }
 }
 
-fn is_process_running(name: &str) -> bool {
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+static PROCESS_CHECK_CACHE: Mutex<Option<(Instant, String, bool)>> = Mutex::new(None);
+
+pub(crate) fn is_process_running(name: &str) -> bool {
+    let target = name.to_lowercase();
+
+    {
+        let cache = PROCESS_CHECK_CACHE.lock().unwrap();
+        if let Some((timestamp, cached_name, result)) = cache.as_ref() {
+            if *cached_name == target && timestamp.elapsed() < Duration::from_secs(1) {
+                return *result;
+            }
+        }
+    }
+
     use sysinfo::{ProcessesToUpdate, System};
     let mut system = System::new();
     system.refresh_processes(ProcessesToUpdate::All, true);
-    let target = name.to_lowercase();
-    system
+    let result = system
         .processes()
         .values()
-        .any(|p| p.name().to_string_lossy().to_lowercase() == target)
+        .any(|p| p.name().to_string_lossy().to_lowercase() == target);
+
+    {
+        let mut cache = PROCESS_CHECK_CACHE.lock().unwrap();
+        *cache = Some((Instant::now(), target, result));
+    }
+
+    result
 }
 
 /// Extrai todos os arquivos de um ZIP para o diretório de destino

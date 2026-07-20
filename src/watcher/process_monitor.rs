@@ -1,9 +1,10 @@
+#![allow(dead_code)]
 //! Monitoramento otimizado de processos usando sysinfo
 //! Implementa estratégia híbrida: polling rápido (1s) aguardando jogo,
 //! polling lento (10s) quando jogo está rodando
 
 use std::time::Duration;
-use sysinfo::{Pid, ProcessesToUpdate, System};
+use sysinfo::{ProcessesToUpdate, System};
 
 /// Estado do monitoramento de processo
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -20,7 +21,6 @@ pub enum ProcessState {
 pub struct ProcessMonitor {
     system: System,
     target_name_lower: String,
-    cached_pid: Option<Pid>,
     state: ProcessState,
     consecutive_misses: u32,
 }
@@ -34,7 +34,6 @@ impl ProcessMonitor {
         Self {
             system: System::new(),
             target_name_lower: process_name.to_lowercase(),
-            cached_pid: None,
             state: ProcessState::Waiting,
             consecutive_misses: 0,
         }
@@ -43,37 +42,33 @@ impl ProcessMonitor {
     /// Verifica estado atual do processo
     /// Retorna ProcessState indicando se processo foi detectado, está rodando ou foi fechado
     pub fn check_process(&mut self) -> ProcessState {
+        self.system.refresh_processes(ProcessesToUpdate::All, true);
+
+        let found = self
+            .system
+            .processes()
+            .values()
+            .any(|p| p.name().to_string_lossy().to_lowercase() == self.target_name_lower);
+
         match self.state {
             ProcessState::Waiting => {
-                self.system.refresh_processes(ProcessesToUpdate::All, true);
-
-                if let Some((pid, _)) = self.system.processes().iter().find(|(_, p)| {
-                    p.name().to_string_lossy().to_lowercase() == self.target_name_lower
-                }) {
-                    self.cached_pid = Some(*pid);
+                if found {
                     self.consecutive_misses = 0;
                     self.state = ProcessState::Running;
-                    return ProcessState::Running;
+                    ProcessState::Running
+                } else {
+                    self.consecutive_misses += 1;
+                    ProcessState::Waiting
                 }
-
-                self.consecutive_misses += 1;
-                ProcessState::Waiting
             }
             ProcessState::Running => {
-                if let Some(pid) = self.cached_pid {
-                    self.system
-                        .refresh_processes(ProcessesToUpdate::Some(&[pid]), false);
-
-                    if self.system.process(pid).is_some() {
-                        return ProcessState::Running;
-                    }
-
-                    self.cached_pid = None;
+                if found {
+                    ProcessState::Running
+                } else {
                     self.consecutive_misses = 0;
                     self.state = ProcessState::Stopped;
-                    return ProcessState::Stopped;
+                    ProcessState::Stopped
                 }
-                ProcessState::Stopped
             }
             ProcessState::Stopped => {
                 self.state = ProcessState::Waiting;
@@ -91,7 +86,7 @@ impl ProcessMonitor {
                 let ms = (base_ms.saturating_mul(factor)).min(max_ms);
                 Duration::from_millis(ms)
             }
-            ProcessState::Running => Duration::from_secs(30),
+            ProcessState::Running => Duration::from_secs(5),
             ProcessState::Stopped => Duration::from_millis(500),
         }
     }

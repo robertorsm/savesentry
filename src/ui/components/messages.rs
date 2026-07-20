@@ -15,7 +15,7 @@ pub fn render_messages_banner(ui: &mut egui::Ui, state: &mut AppState) {
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.button("X").clicked() {
-                            state.error_message = None;
+                            state.clear_messages();
                         }
                     });
                 });
@@ -34,7 +34,7 @@ pub fn render_messages_banner(ui: &mut egui::Ui, state: &mut AppState) {
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.button("X").clicked() {
-                            state.success_message = None;
+                            state.clear_messages();
                         }
                     });
                 });

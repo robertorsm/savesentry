@@ -67,6 +67,7 @@ pub struct AppState {
     // UI state
     pub error_message: Option<String>,
     pub success_message: Option<String>,
+    pub message_expires_at: Option<std::time::Instant>,
 
     // Navegação por abas
     pub active_tab: ActiveTab,
@@ -83,6 +84,8 @@ pub struct AppState {
     pub last_ui_update: std::time::Instant,
     pub selected_backup_filename: Option<String>,
     pub screenshot_textures: std::collections::HashMap<String, eframe::egui::TextureHandle>,
+
+    pub egui_ctx: eframe::egui::Context,
 }
 
 /// Entrada no histórico de backups
@@ -97,12 +100,14 @@ pub struct BackupEntry {
 
 impl AppState {
     /// Cria um novo estado da aplicação
-    pub fn new(db_path: std::path::PathBuf) -> Self {
+    pub fn new(db_path: std::path::PathBuf, egui_ctx: eframe::egui::Context) -> Self {
         // Inicializa banco de dados
         let db = crate::db::Database::new(&db_path).expect("Falha ao inicializar banco de dados");
 
-        // Carrega templates existentes
-        let templates = db.list_game_templates().unwrap_or_default();
+        let mut templates = db.list_game_templates().unwrap_or_default();
+        for t in &mut templates {
+            t.ensure_expanded();
+        }
 
         let mut state = Self {
             db,
@@ -122,6 +127,7 @@ impl AppState {
             },
             error_message: None,
             success_message: None,
+            message_expires_at: None,
             active_tab: ActiveTab::Main,
             template_form: TemplateForm {
                 selected_for_edit: None,
@@ -147,6 +153,7 @@ impl AppState {
             last_ui_update: std::time::Instant::now(),
             selected_backup_filename: None,
             screenshot_textures: std::collections::HashMap::new(),
+            egui_ctx,
         };
 
         // 🚀 Auto-restore último perfil usado
@@ -220,9 +227,9 @@ impl AppState {
         self.backup_history_last_reload = Some(std::time::Instant::now());
     }
 
-    /// Invalida o cache de backup history (forçar reload no próximo acesso)
     pub fn invalidate_backup_cache(&mut self) {
         self.backup_history_last_reload = None;
+        self.backup_history.clear();
     }
 
     fn find_latest_save(&self) -> Option<(std::path::PathBuf, std::time::SystemTime)> {
@@ -341,10 +348,22 @@ impl AppState {
     }
 
     /// Limpa mensagens de erro/sucesso
-    #[allow(dead_code)]
     pub fn clear_messages(&mut self) {
         self.error_message = None;
         self.success_message = None;
+        self.message_expires_at = None;
+    }
+
+    pub fn set_success_message(&mut self, msg: impl Into<String>) {
+        self.success_message = Some(msg.into());
+        self.error_message = None;
+        self.message_expires_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+    }
+
+    pub fn set_error_message(&mut self, msg: impl Into<String>) {
+        self.error_message = Some(msg.into());
+        self.success_message = None;
+        self.message_expires_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
     }
 
     /// Limpa o formulário de template
@@ -368,9 +387,12 @@ impl AppState {
         self.template_form.original_backup_max_count = 50;
     }
 
-    /// Recarrega lista de templates do banco
     pub fn reload_templates(&mut self) {
-        self.templates = self.db.list_game_templates().unwrap_or_default();
+        let mut templates = self.db.list_game_templates().unwrap_or_default();
+        for t in &mut templates {
+            t.ensure_expanded();
+        }
+        self.templates = templates;
     }
 
     fn restore_last_profile(&mut self) {
@@ -391,8 +413,41 @@ impl AppState {
                     #[cfg(debug_assertions)]
                     println!("📋 Restored last profile: {}", profile.name);
 
-                    if profile.process_name.is_some() {
-                        match crate::watcher::start_watching(profile) {
+                    if let Some(ref proc_name) = profile.process_name {
+                        if crate::ui::actions::monitoring::is_process_running(proc_name) {
+                            match crate::watcher::start_watching(profile, self.egui_ctx.clone()) {
+                                Ok(handle) => {
+                                    self.active_watcher = Some(handle);
+                                    if let Some(ref mut active_profile) = self.active_profile {
+                                        active_profile.is_active = true;
+                                    }
+                                    self.invalidate_backup_cache();
+                                    self.reload_backup_history();
+
+                                    #[cfg(debug_assertions)]
+                                    println!(
+                                        "✅ Auto-started watcher for process: {:?}",
+                                        self.active_profile.as_ref().unwrap().process_name
+                                    );
+                                    return;
+                                }
+                                Err(e) => {
+                                    self.error_message =
+                                        Some(format!("Falha ao iniciar watcher: {}", e));
+                                    self.active_profile = None;
+                                    self.selected_template_id = None;
+                                    self.current_save_path.clear();
+                                }
+                            }
+                        } else {
+                            self.success_message = Some(format!(
+                                "Perfil '{}' restaurado — aguardando '{}'",
+                                profile.name, proc_name
+                            ));
+                            return;
+                        }
+                    } else {
+                        match crate::watcher::start_watching(profile, self.egui_ctx.clone()) {
                             Ok(handle) => {
                                 self.active_watcher = Some(handle);
                                 if let Some(ref mut active_profile) = self.active_profile {
@@ -400,25 +455,21 @@ impl AppState {
                                 }
                                 self.invalidate_backup_cache();
                                 self.reload_backup_history();
-
-                                #[cfg(debug_assertions)]
-                                println!(
-                                    "✅ Auto-started watcher for process: {:?}",
-                                    self.active_profile.as_ref().unwrap().process_name
-                                );
+                                return;
                             }
-                            Err(_e) => {
-                                #[cfg(debug_assertions)]
-                                eprintln!("❌ Failed to auto-start watcher: {}", _e);
+                            Err(e) => {
+                                self.error_message =
+                                    Some(format!("Falha ao iniciar watcher: {}", e));
+                                self.active_profile = None;
+                                self.selected_template_id = None;
+                                self.current_save_path.clear();
                             }
                         }
                     }
-                    return;
                 }
             }
         }
 
-        // Se não restaurou perfil, tenta detectar jogo rodando
         self.try_auto_detect_running_game();
     }
 
