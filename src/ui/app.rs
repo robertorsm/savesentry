@@ -20,7 +20,7 @@ impl App {
         let db_path = exe_dir.join("savesentry.db");
 
         Self {
-            state: AppState::new(db_path),
+            state: AppState::new(db_path, _cc.egui_ctx.clone()),
         }
     }
 }
@@ -43,11 +43,8 @@ impl eframe::App for App {
                 self.state.restart_monitoring_after = None;
                 self.state.start_monitoring();
                 ctx.request_repaint();
-            } else {
-                ctx.request_repaint_after(std::time::Duration::from_secs(1));
             }
         }
-
 
     }
 

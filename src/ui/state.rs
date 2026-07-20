@@ -83,6 +83,8 @@ pub struct AppState {
     pub last_ui_update: std::time::Instant,
     pub selected_backup_filename: Option<String>,
     pub screenshot_textures: std::collections::HashMap<String, eframe::egui::TextureHandle>,
+
+    pub egui_ctx: eframe::egui::Context,
 }
 
 /// Entrada no histórico de backups
@@ -97,7 +99,7 @@ pub struct BackupEntry {
 
 impl AppState {
     /// Cria um novo estado da aplicação
-    pub fn new(db_path: std::path::PathBuf) -> Self {
+    pub fn new(db_path: std::path::PathBuf, egui_ctx: eframe::egui::Context) -> Self {
         // Inicializa banco de dados
         let db = crate::db::Database::new(&db_path).expect("Falha ao inicializar banco de dados");
 
@@ -147,6 +149,7 @@ impl AppState {
             last_ui_update: std::time::Instant::now(),
             selected_backup_filename: None,
             screenshot_textures: std::collections::HashMap::new(),
+            egui_ctx,
         };
 
         // 🚀 Auto-restore último perfil usado
@@ -392,7 +395,7 @@ impl AppState {
                     println!("📋 Restored last profile: {}", profile.name);
 
                     if profile.process_name.is_some() {
-                        match crate::watcher::start_watching(profile) {
+                        match crate::watcher::start_watching(profile, self.egui_ctx.clone()) {
                             Ok(handle) => {
                                 self.active_watcher = Some(handle);
                                 if let Some(ref mut active_profile) = self.active_profile {

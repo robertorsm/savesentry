@@ -95,7 +95,7 @@ impl AppState {
 
             if let Some(ref proc_name) = profile.process_name {
                 if is_process_running(proc_name) {
-                    match crate::watcher::start_watching(profile) {
+                    match crate::watcher::start_watching(profile, self.egui_ctx.clone()) {
                         Ok(handle) => {
                             self.active_watcher = Some(handle);
                             if let Some(ref mut active_profile) = self.active_profile {
@@ -176,7 +176,7 @@ impl AppState {
             profile.is_active = true;
 
             // Clone apenas uma vez para enviar para thread (necessário)
-            match crate::watcher::start_watching(profile.clone()) {
+            match crate::watcher::start_watching(profile.clone(), self.egui_ctx.clone()) {
                 Ok(handle) => {
                     self.active_watcher = Some(handle);
                     self.success_message = Some("Monitoramento iniciado".to_string());
@@ -253,6 +253,54 @@ impl AppState {
             Err(e) => {
                 self.error_message = Some(format!("Erro ao restaurar: {}", e));
             }
+        }
+    }
+
+    /// Exclui um backup permanentemente (arquivo ZIP e screenshot PNG)
+    pub fn delete_backup(&mut self, filename: &str) {
+        let backup_dir = if let Some(ref profile) = self.active_profile {
+            profile.backup_dir.clone()
+        } else {
+            self.config.backup_dir.clone()
+        };
+
+        if backup_dir.is_empty() {
+            self.error_message = Some("Diretório de backup não configurado".to_string());
+            return;
+        }
+
+        let backup_dir_path = std::path::Path::new(&backup_dir);
+        let zip_path = backup_dir_path.join(filename);
+        let png_path = backup_dir_path.join(filename).with_extension("png");
+
+        let mut deleted_any = false;
+
+        if zip_path.exists() {
+            if let Err(e) = std::fs::remove_file(&zip_path) {
+                self.error_message = Some(format!("Erro ao excluir backup: {}", e));
+                return;
+            }
+            deleted_any = true;
+        }
+
+        if png_path.exists() {
+            if let Err(e) = std::fs::remove_file(&png_path) {
+                self.error_message = Some(format!("Erro ao excluir screenshot: {}", e));
+                return;
+            }
+            deleted_any = true;
+        }
+
+        if deleted_any {
+            if self.selected_backup_filename.as_deref() == Some(filename) {
+                self.selected_backup_filename = None;
+            }
+            self.screenshot_textures.remove(filename);
+            self.invalidate_backup_cache();
+            self.reload_backup_history();
+            self.success_message = Some(format!("Backup '{}' excluído", filename));
+        } else {
+            self.error_message = Some("Backup não encontrado".to_string());
         }
     }
 

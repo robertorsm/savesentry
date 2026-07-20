@@ -48,7 +48,10 @@ impl WatcherHandle {
 }
 
 /// Inicia o monitoramento de um perfil em background
-pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std::error::Error>> {
+pub fn start_watching(
+    profile: GameProfile,
+    ctx: eframe::egui::Context,
+) -> Result<WatcherHandle, Box<dyn std::error::Error>> {
     let profile_id = profile.id;
     let _profile_name = profile.name.clone();
     let _profile_name_for_monitor = _profile_name.clone(); // Clone para usar na segunda closure
@@ -58,6 +61,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
     let exclude_pattern = profile.exclude_pattern.clone();
     let save_pattern = profile.save_pattern.clone();
     let process_name = profile.process_name.clone();
+    let ctx_clone = ctx.clone();
 
     // Flag compartilhada: indica se deve monitorar arquivo
     // Se process_name existe, começar desabilitado até processo ser detectado
@@ -133,6 +137,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                                     backup_path, _profile_name
                                 );
                                 last_backup_path = Some(backup_path);
+                                ctx_clone.request_repaint();
                             }
                             Err(e) => {
                                 eprintln!("❌ Erro ao criar backup para {}: {}", _profile_name, e);
@@ -142,6 +147,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                         #[cfg(not(debug_assertions))]
                         if let Ok(backup_path) = file_watcher.create_backup(&save_path) {
                             last_backup_path = Some(backup_path);
+                            ctx_clone.request_repaint();
                         }
                         file_watcher.set_pending(false);
                     }
@@ -214,6 +220,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                                     backup_path, _profile_name
                                 );
                                 last_backup_path = Some(backup_path);
+                                ctx_clone.request_repaint();
                             }
                             Err(e) => {
                                 eprintln!("❌ Erro ao criar backup para {}: {}", _profile_name, e);
@@ -223,6 +230,7 @@ pub fn start_watching(profile: GameProfile) -> Result<WatcherHandle, Box<dyn std
                         #[cfg(not(debug_assertions))]
                         if let Ok(backup_path) = file_watcher.create_backup(&save_path) {
                             last_backup_path = Some(backup_path);
+                            ctx_clone.request_repaint();
                         }
                         file_watcher.set_pending(false);
                     }

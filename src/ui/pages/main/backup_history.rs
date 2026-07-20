@@ -25,6 +25,7 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
 
     if !state.backup_history.is_empty() {
         let mut clicked_restore: Option<String> = None;
+        let mut delete_backup: Option<String> = None;
         let backup_dir = std::path::Path::new(&state.config.backup_dir);
 
         egui::ScrollArea::vertical()
@@ -88,6 +89,13 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                         })
                         .response;
 
+                    response.context_menu(|ui| {
+                        if ui.button("🗑 Excluir").clicked() {
+                            delete_backup = Some(backup.filename.clone());
+                            ui.close();
+                        }
+                    });
+
                     let frame_clicked = ui.input(|i| {
                         let pointer = &i.pointer;
                         if let Some(pos) = pointer.interact_pos() {
@@ -109,6 +117,10 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
 
         if let Some(filename) = clicked_restore {
             state.restore_backup(&filename);
+        }
+
+        if let Some(filename) = delete_backup {
+            state.delete_backup(&filename);
         }
     }
 
