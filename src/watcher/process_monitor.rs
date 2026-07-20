@@ -85,7 +85,7 @@ impl ProcessMonitor {
                 let ms = (base_ms.saturating_mul(factor)).min(max_ms);
                 Duration::from_millis(ms)
             }
-            ProcessState::Running => Duration::from_secs(30),
+            ProcessState::Running => Duration::from_secs(5),
             ProcessState::Stopped => Duration::from_millis(500),
         }
     }
