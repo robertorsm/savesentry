@@ -11,6 +11,7 @@ impl AppState {
             self.template_form.save_dir = template.save_directory.clone();
             self.template_form.backup_dir = template.backup_dir.clone();
             self.template_form.backup_delay_minutes = template.backup_delay_minutes;
+            self.template_form.backup_max_count = template.backup_max_count;
             self.template_form.process = template.process_name.clone();
             self.template_form.pattern = template.save_pattern.clone();
             self.template_form.exclude = template.exclude_pattern.clone().unwrap_or_default();
@@ -18,6 +19,7 @@ impl AppState {
             self.template_form.original_save_dir = template.save_directory.clone();
             self.template_form.original_backup_dir = template.backup_dir.clone();
             self.template_form.original_backup_delay_minutes = template.backup_delay_minutes;
+            self.template_form.original_backup_max_count = template.backup_max_count;
             self.template_form.original_process = template.process_name.clone();
             self.template_form.original_pattern = template.save_pattern.clone();
             self.template_form.original_exclude =
@@ -60,6 +62,7 @@ impl AppState {
             None, // default_exclude_pattern não é configurável pelo usuário
             &self.template_form.backup_dir,
             self.template_form.backup_delay_minutes,
+            self.template_form.backup_max_count,
         ) {
             Ok(_) => {
                 self.success_message = Some(format!(
@@ -96,7 +99,9 @@ impl AppState {
                 || self.template_form.pattern != self.template_form.original_pattern
                 || self.template_form.exclude != self.template_form.original_exclude
                 || self.template_form.backup_delay_minutes
-                    != self.template_form.original_backup_delay_minutes;
+                    != self.template_form.original_backup_delay_minutes
+                || self.template_form.backup_max_count
+                    != self.template_form.original_backup_max_count;
 
             match self.db.update_game_template(
                 template_id,
@@ -108,6 +113,7 @@ impl AppState {
                 None, // default_exclude_pattern não é configurável pelo usuário (apenas oficiais)
                 &self.template_form.backup_dir,
                 self.template_form.backup_delay_minutes,
+                self.template_form.backup_max_count,
             ) {
                 Ok(_) => {
                     self.success_message =

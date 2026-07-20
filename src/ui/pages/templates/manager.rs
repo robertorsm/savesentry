@@ -188,6 +188,18 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                     });
                     ui.end_row();
 
+                    ui.label("Máx. Backups:");
+                    ui.horizontal(|ui| {
+                        ui.add_sized(
+                            [70.0, 20.0],
+                            egui::DragValue::new(&mut state.template_form.backup_max_count)
+                                .speed(0.5)
+                                .range(1..=1000),
+                        );
+                        ui.label("backups");
+                    });
+                    ui.end_row();
+
                     ui.label("Processo:");
                     ui.text_edit_singleline(&mut state.template_form.process);
                     ui.end_row();
@@ -261,6 +273,7 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                 ui.label("• Padrões: *.sav, *.dat, save*.*");
                 ui.label("• Exclusão: *.tmp, *.bak, autosave*");
                 ui.label("• Backup Delay: intervalo mínimo entre backups (em minutos)");
+                ui.label("• Máx. Backups: número máximo de backups a manter (mais antigo é excluído)");
             });
         });
 }

@@ -56,7 +56,7 @@ impl AppState {
                 template_id: Some(template_id),
                 process_name,
                 created_at: chrono::Local::now().to_rfc3339(),
-                backup_max_count: 50,
+                backup_max_count: t.backup_max_count,
                 backup_recursive: false,
             };
 

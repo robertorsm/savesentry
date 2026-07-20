@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS game_templates (
     default_exclude_pattern TEXT,
     backup_dir TEXT NOT NULL,
     backup_delay_minutes INTEGER NOT NULL DEFAULT 5,
+    backup_max_count INTEGER NOT NULL DEFAULT 50,
     version INTEGER NOT NULL DEFAULT 1,
     is_official INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL
@@ -58,6 +59,7 @@ INSERT INTO game_templates (
         default_exclude_pattern,
         backup_dir,
         backup_delay_minutes,
+        backup_max_count,
         version,
         is_official,
         created_at
@@ -71,6 +73,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Minecraft',
         5,
+        50,
         1,
         1,
         datetime('now')
@@ -84,6 +87,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Terraria',
         5,
+        50,
         1,
         1,
         datetime('now')
@@ -97,6 +101,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Stardew Valley',
         5,
+        50,
         1,
         1,
         datetime('now')
@@ -110,6 +115,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\The Witcher 3',
         5,
+        50,
         1,
         1,
         datetime('now')
@@ -123,6 +129,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Skyrim',
         5,
+        50,
         1,
         1,
         datetime('now')
@@ -136,6 +143,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Dark Souls III',
         5,
+        50,
         1,
         1,
         datetime('now')
@@ -149,6 +157,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Elden Ring',
         5,
+        50,
         1,
         1,
         datetime('now')
@@ -162,6 +171,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Cyberpunk 2077',
         5,
+        50,
         1,
         1,
         datetime('now')
@@ -175,6 +185,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Valheim',
         5,
+        50,
         1,
         1,
         datetime('now')
@@ -188,6 +199,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Hollow Knight',
         5,
+        50,
         1,
         1,
         datetime('now')
@@ -201,6 +213,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Octopath Traveler',
         1,
+        50,
         1,
         1,
         datetime('now')

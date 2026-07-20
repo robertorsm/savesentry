@@ -62,7 +62,7 @@ impl GameProfile {
             is_active: false,
             process_name: Some(template.process_name.clone()),
             created_at: chrono::Local::now().to_rfc3339(),
-            backup_max_count: 50,
+            backup_max_count: template.backup_max_count,
             backup_recursive: false,
         }
     }
