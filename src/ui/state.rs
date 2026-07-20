@@ -395,6 +395,8 @@ impl AppState {
                         match crate::watcher::start_watching(profile) {
                             Ok(handle) => {
                                 self.active_watcher = Some(handle);
+                                self.invalidate_backup_cache();
+                                self.reload_backup_history();
 
                                 #[cfg(debug_assertions)]
                                 println!(

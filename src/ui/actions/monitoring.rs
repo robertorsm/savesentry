@@ -101,6 +101,8 @@ impl AppState {
                             if let Some(ref mut active_profile) = self.active_profile {
                                 active_profile.is_active = true;
                             }
+                            self.invalidate_backup_cache();
+                            self.reload_backup_history();
                             self.success_message = Some(format!(
                                 "Template '{}' selecionado — monitoramento ativo",
                                 template_name
