@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Monitoramento otimizado de processos usando sysinfo
 //! Implementa estratégia híbrida: polling rápido (1s) aguardando jogo,
 //! polling lento (10s) quando jogo está rodando
