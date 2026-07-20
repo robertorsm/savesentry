@@ -56,6 +56,13 @@ impl eframe::App for App {
             }
         }
 
+        if let Some(expires) = self.state.message_expires_at {
+            if expires <= now {
+                self.state.clear_messages();
+                ctx.request_repaint();
+            }
+        }
+
         if let Some(ref watcher) = self.state.active_watcher {
             if !watcher.process_running.load(std::sync::atomic::Ordering::Relaxed) {
                 self.state.stop_monitoring();

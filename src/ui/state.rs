@@ -67,6 +67,7 @@ pub struct AppState {
     // UI state
     pub error_message: Option<String>,
     pub success_message: Option<String>,
+    pub message_expires_at: Option<std::time::Instant>,
 
     // Navegação por abas
     pub active_tab: ActiveTab,
@@ -126,6 +127,7 @@ impl AppState {
             },
             error_message: None,
             success_message: None,
+            message_expires_at: None,
             active_tab: ActiveTab::Main,
             template_form: TemplateForm {
                 selected_for_edit: None,
@@ -346,10 +348,22 @@ impl AppState {
     }
 
     /// Limpa mensagens de erro/sucesso
-    #[allow(dead_code)]
     pub fn clear_messages(&mut self) {
         self.error_message = None;
         self.success_message = None;
+        self.message_expires_at = None;
+    }
+
+    pub fn set_success_message(&mut self, msg: impl Into<String>) {
+        self.success_message = Some(msg.into());
+        self.error_message = None;
+        self.message_expires_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+    }
+
+    pub fn set_error_message(&mut self, msg: impl Into<String>) {
+        self.error_message = Some(msg.into());
+        self.success_message = None;
+        self.message_expires_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
     }
 
     /// Limpa o formulário de template
