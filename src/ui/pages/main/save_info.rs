@@ -10,6 +10,18 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
         return;
     }
 
+    // Extrai dados do perfil para evitar borrow conflicts com state mutável depois
+    let profile_data = state.active_profile.as_ref().map(|p| {
+        (
+            p.is_active,
+            p.backup_delay_minutes,
+            p.backup_max_count,
+            p.process_name.clone(),
+            p.save_path.clone(),
+            p.backup_dir.clone(),
+        )
+    });
+
     let has_file = !state.current_save_file.is_empty();
 
     if has_file {
@@ -45,30 +57,74 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
         });
     }
 
-    if let Some(ref profile) = state.active_profile {
-        if profile.is_active {
+    if let Some((is_active, delay_minutes, max_count, process_name, save_path, backup_dir)) =
+        profile_data
+    {
+        if is_active {
+            ui.add_space(6.0);
+            ui.separator();
             ui.add_space(4.0);
+
+            if let Some(ref watcher) = state.active_watcher {
+                if let Some(remaining) = watcher.remaining_backup_seconds(delay_minutes) {
+                    let mins = remaining / 60;
+                    let secs = remaining % 60;
+                    let label = if remaining == 0 {
+                        "Pronto para backup".to_string()
+                    } else {
+                        format!("Próximo backup em: {:02}:{:02}", mins, secs)
+                    };
+                    ui.horizontal(|ui| {
+                        ui.label("Próximo save:");
+                        ui.label(
+                            egui::RichText::new(label)
+                                .strong()
+                                .color(if remaining == 0 {
+                                    egui::Color32::from_rgb(100, 220, 100)
+                                } else {
+                                    egui::Color32::from_rgb(220, 180, 80)
+                                })
+                                .size(14.0),
+                        );
+                    });
+                }
+            }
+
+            state.reload_backup_history();
+            let backup_count = state.backup_history.len();
+            let max_count = max_count as usize;
+            let count_color = if backup_count >= max_count {
+                egui::Color32::from_rgb(220, 80, 80)
+            } else {
+                egui::Color32::from_rgb(180, 180, 180)
+            };
             ui.horizontal(|ui| {
-                ui.label("Backup Delay:");
+                ui.label("Backups:");
                 ui.label(
-                    egui::RichText::new(format!("{} min", profile.backup_delay_minutes)).weak(),
+                    egui::RichText::new(format!("{} / {}", backup_count, max_count))
+                        .strong()
+                        .color(count_color)
+                        .size(14.0),
+                );
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Intervalo:");
+                ui.label(
+                    egui::RichText::new(format!("{} min", delay_minutes)).weak(),
                 );
             });
             ui.horizontal(|ui| {
                 ui.label("Backups em:");
-                ui.label(egui::RichText::new(&profile.backup_dir).weak())
-                    .on_hover_text(&profile.backup_dir);
+                ui.label(egui::RichText::new(&backup_dir).weak())
+                    .on_hover_text(&backup_dir);
             });
-        }
-    }
 
-    if let Some(ref profile) = state.active_profile {
-        if profile.is_active {
             ui.add_space(4.0);
             ui.separator();
             ui.add_space(2.0);
 
-            if let Some(ref process) = profile.process_name {
+            if let Some(ref process) = process_name {
                 ui.horizontal(|ui| {
                     ui.label("Processo:");
                     ui.label(egui::RichText::new(process).strong().size(12.0))
@@ -78,39 +134,9 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
 
             ui.horizontal(|ui| {
                 ui.label("Save em:");
-                ui.label(egui::RichText::new(&profile.save_path).weak().size(11.0))
+                ui.label(egui::RichText::new(&save_path).weak().size(11.0))
                     .on_hover_text("Diretório do save");
             });
-        }
-    }
-
-    if let Some(ref watcher) = state.active_watcher {
-        if let Some(ref profile) = state.active_profile {
-            if profile.is_active {
-                if let Some(remaining) =
-                    watcher.remaining_backup_seconds(profile.backup_delay_minutes)
-                {
-                    ui.add_space(4.0);
-                    let mins = remaining / 60;
-                    let secs = remaining % 60;
-                    let label = if remaining == 0 {
-                        "Pronto para backup".to_string()
-                    } else {
-                        format!("Próximo backup em: {:02}:{:02}", mins, secs)
-                    };
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new(label)
-                                .color(if remaining == 0 {
-                                    egui::Color32::from_rgb(100, 200, 100)
-                                } else {
-                                    egui::Color32::from_rgb(200, 150, 80)
-                                })
-                                .size(12.0),
-                        );
-                    });
-                }
-            }
         }
     }
 
