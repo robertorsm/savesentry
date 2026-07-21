@@ -51,7 +51,9 @@ impl eframe::App for App {
         if let Some(instant) = self.state.restart_monitoring_after {
             if instant <= now {
                 self.state.restart_monitoring_after = None;
-                self.state.start_monitoring();
+                if self.state.active_watcher.is_none() {
+                    self.state.start_monitoring();
+                }
                 ctx.request_repaint();
             }
         }
