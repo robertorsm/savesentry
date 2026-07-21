@@ -276,7 +276,12 @@ impl FileWatcher {
 
         let to_remove = entries.len() - max_backups;
         for entry in entries.iter().take(to_remove) {
-            let _ = fs::remove_file(entry.path());
+            let path = entry.path();
+            let _ = fs::remove_file(&path);
+            let png_path = path.with_extension("png");
+            if png_path.exists() {
+                let _ = fs::remove_file(&png_path);
+            }
         }
 
         Ok(())

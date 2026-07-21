@@ -268,7 +268,12 @@ impl AppState {
                     for entry in entries.flatten() {
                         if let Some(name) = entry.file_name().to_str() {
                             if name.starts_with("BeforeRestore_") && name.ends_with(".zip") {
-                                let _ = std::fs::remove_file(entry.path());
+                                let path = entry.path();
+                                let _ = std::fs::remove_file(&path);
+                                let png_path = path.with_extension("png");
+                                if png_path.exists() {
+                                    let _ = std::fs::remove_file(&png_path);
+                                }
                             }
                         }
                     }
@@ -395,7 +400,12 @@ impl AppState {
             for entry in entries.flatten() {
                 if let Some(name) = entry.file_name().to_str() {
                     if name.starts_with("BeforeRestore_") && name.ends_with(".zip") {
-                        let _ = std::fs::remove_file(entry.path());
+                        let path = entry.path();
+                        let _ = std::fs::remove_file(&path);
+                        let png_path = path.with_extension("png");
+                        if png_path.exists() {
+                            let _ = std::fs::remove_file(&png_path);
+                        }
                     }
                 }
             }
