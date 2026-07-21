@@ -136,29 +136,37 @@ impl AppState {
     /// Inicia o monitoramento
     pub fn start_monitoring(&mut self) {
         let last_backup_time = self.last_backup_time_before_restore.take();
-        self.start_monitoring_with_last_backup_time(last_backup_time);
+        self.start_monitoring_internal(last_backup_time, false);
     }
 
-    fn start_monitoring_with_last_backup_time(&mut self, last_backup_time: Option<u64>) {
-        // Valida se tem perfil ativo
+    pub fn restart_monitoring(&mut self) {
+        let last_backup_time = self.last_backup_time_before_restore.take();
+        self.start_monitoring_internal(last_backup_time, true);
+    }
+
+    fn start_monitoring_internal(&mut self, last_backup_time: Option<u64>, silent: bool) {
         if self.active_profile.is_none() {
-            self.set_error_message("Selecione um template primeiro".to_string());
+            if !silent {
+                self.set_error_message("Selecione um template primeiro".to_string());
+            }
             return;
         }
 
-        // Valida se já está monitorando
         if self.active_watcher.is_some() {
-            self.set_error_message("Monitoramento já está ativo".to_string());
+            if !silent {
+                self.set_error_message("Monitoramento já está ativo".to_string());
+            }
             return;
         }
 
         let resolved_backup_dir = self.get_backup_dir();
 
-        // Pega o perfil ativo
         if let Some(profile) = &mut self.active_profile {
             if resolved_backup_dir.is_empty() {
-                self.error_message =
-                    Some("Configure o diretório de backup padrão em Configurações".to_string());
+                if !silent {
+                    self.error_message =
+                        Some("Configure o diretório de backup padrão em Configurações".to_string());
+                }
                 return;
             }
 
@@ -171,7 +179,9 @@ impl AppState {
                         println!("💾 Perfil salvo no banco com ID: {}", new_id);
                     }
                     Err(e) => {
-                        self.set_error_message(format!("Erro ao salvar perfil: {}", e));
+                        if !silent {
+                            self.set_error_message(format!("Erro ao salvar perfil: {}", e));
+                        }
                         return;
                     }
                 }
@@ -185,20 +195,23 @@ impl AppState {
 
             profile.is_active = true;
 
-            // Resolve diretório de backup antes de enviar para a thread
             let mut profile_for_watcher = profile.clone();
             profile_for_watcher.backup_dir = resolved_backup_dir;
 
             match crate::watcher::start_watching(profile_for_watcher, self.egui_ctx.clone(), last_backup_time) {
                 Ok(handle) => {
                     self.active_watcher = Some(handle);
-                    self.set_success_message("Monitoramento iniciado".to_string());
+                    if !silent {
+                        self.set_success_message("Monitoramento iniciado".to_string());
+                    }
                     self.invalidate_backup_cache();
                     self.update_save_info();
                     self.reload_backup_history();
                 }
                 Err(e) => {
-                    self.set_error_message(format!("Erro ao iniciar monitoramento: {}", e));
+                    if !silent {
+                        self.set_error_message(format!("Erro ao iniciar monitoramento: {}", e));
+                    }
                 }
             }
         }

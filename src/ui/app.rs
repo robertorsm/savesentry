@@ -41,7 +41,7 @@ impl eframe::App for App {
                 if let Some(ref profile) = self.state.active_profile {
                     if let Some(ref proc_name) = profile.process_name {
                         if crate::ui::actions::monitoring::is_process_running(proc_name) {
-                            self.state.start_monitoring();
+                            self.state.restart_monitoring();
                         }
                     }
                 }
@@ -52,7 +52,7 @@ impl eframe::App for App {
             if instant <= now {
                 self.state.restart_monitoring_after = None;
                 if self.state.active_watcher.is_none() {
-                    self.state.start_monitoring();
+                    self.state.restart_monitoring();
                 }
                 ctx.request_repaint();
             }
