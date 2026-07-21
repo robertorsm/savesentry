@@ -342,6 +342,9 @@ impl AppState {
                 self.last_seen_backup_time = last_backup;
                 self.invalidate_backup_cache();
                 self.reload_backup_history();
+                if let Some(latest) = self.backup_history.first() {
+                    self.selected_backup_filename = Some(latest.filename.clone());
+                }
                 return true;
             }
         }
