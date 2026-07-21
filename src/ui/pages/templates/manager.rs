@@ -163,7 +163,7 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                         ui.add_sized(
                             [available_width, 20.0],
                             egui::TextEdit::singleline(&mut state.template_form.backup_dir)
-                                .hint_text("%USERPROFILE%\\SaveSentry\\Jogo"),
+                                .hint_text("Opcional — usa diretório padrão de Config"),
                         );
                         if ui.button("Buscar").clicked() {
                             if let Some(path) = rfd::FileDialog::new()
@@ -217,10 +217,9 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
 
             ui.horizontal(|ui| {
                 if state.template_form.is_new {
-                    let can_create = !state.template_form.name.trim().is_empty()
-                        && !state.template_form.save_dir.trim().is_empty()
-                        && !state.template_form.backup_dir.trim().is_empty()
-                        && !state.template_form.process.trim().is_empty();
+                        let can_create = !state.template_form.name.trim().is_empty()
+                            && !state.template_form.save_dir.trim().is_empty()
+                            && !state.template_form.process.trim().is_empty();
 
                     if ui
                         .add_enabled(

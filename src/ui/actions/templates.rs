@@ -38,10 +38,6 @@ impl AppState {
             self.set_error_message("Diretório de save é obrigatório".to_string());
             return;
         }
-        if self.template_form.backup_dir.trim().is_empty() {
-            self.set_error_message("Diretório de backup é obrigatório".to_string());
-            return;
-        }
         if self.template_form.process.trim().is_empty() {
             self.set_error_message("Nome do processo é obrigatório".to_string());
             return;

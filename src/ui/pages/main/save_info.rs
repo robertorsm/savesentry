@@ -50,9 +50,15 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
                 .as_ref()
                 .and_then(|w| w.remaining_backup_seconds(delay_minutes));
 
-            let backup_count = state.backup_history.len();
+            let (auto_count, pinned_count) = state.backup_history.iter().fold((0usize, 0usize), |(auto, pinned), b| {
+                if b.filename.starts_with("backup_") && b.filename.ends_with(".zip") {
+                    (auto + 1, pinned)
+                } else {
+                    (auto, pinned + 1)
+                }
+            });
             let max_count = max_count as usize;
-            let count_color = if backup_count >= max_count {
+            let count_color = if auto_count >= max_count {
                 egui::Color32::from_rgb(220, 80, 80)
             } else {
                 egui::Color32::from_rgb(180, 180, 180)
@@ -87,11 +93,22 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
                 ui.add_space(16.0);
                 ui.label("Backups:");
                 ui.label(
-                    egui::RichText::new(format!("{} / {}", backup_count, max_count))
+                    egui::RichText::new(format!("{} / {}", auto_count, max_count))
                         .strong()
                         .color(count_color)
                         .size(14.0),
                 );
+
+                if pinned_count > 0 {
+                    ui.add_space(16.0);
+                    ui.label("Fixados:");
+                    ui.label(
+                        egui::RichText::new(format!("{}", pinned_count))
+                            .strong()
+                            .color(egui::Color32::from_rgb(100, 200, 200))
+                            .size(14.0),
+                    );
+                }
 
                 ui.add_space(16.0);
                 ui.label("Intervalo:");

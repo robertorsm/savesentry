@@ -60,29 +60,27 @@ impl AppState {
                 backup_recursive: false,
             };
 
-            if !profile.backup_dir.is_empty() {
-                match self.db.insert_game_profile(&profile) {
-                    Ok(new_id) => {
-                        profile.id = new_id;
+            match self.db.insert_game_profile(&profile) {
+                Ok(new_id) => {
+                    profile.id = new_id;
 
-                        // Salva como último perfil usado
-                        let _ = self.db.update_last_profile(
-                            profile.id,
-                            &profile.backup_dir,
-                            profile.backup_delay_minutes,
-                        );
+                    // Salva como último perfil usado
+                    let _ = self.db.update_last_profile(
+                        profile.id,
+                        &profile.backup_dir,
+                        profile.backup_delay_minutes,
+                    );
 
-                        #[cfg(debug_assertions)]
-                        println!(
-                            "💾 Perfil salvo e registrado como último usado (ID: {})",
-                            new_id
-                        );
-                    }
-                    Err(_e) => {
-                        #[cfg(debug_assertions)]
-                        eprintln!("⚠️ Não foi possível salvar perfil: {}", _e);
-                        // Continua mesmo se falhar (perfil temporário)
-                    }
+                    #[cfg(debug_assertions)]
+                    println!(
+                        "💾 Perfil salvo e registrado como último usado (ID: {})",
+                        new_id
+                    );
+                }
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("⚠️ Não foi possível salvar perfil: {}", _e);
+                    // Continua mesmo se falhar (perfil temporário)
                 }
             }
 
@@ -95,7 +93,9 @@ impl AppState {
 
             if let Some(ref proc_name) = profile.process_name {
                 if is_process_running(proc_name) {
-                    match crate::watcher::start_watching(profile, self.egui_ctx.clone()) {
+                    let mut profile_for_watcher = profile.clone();
+                    profile_for_watcher.backup_dir = self.get_backup_dir();
+                    match crate::watcher::start_watching(profile_for_watcher, self.egui_ctx.clone(), None) {
                         Ok(handle) => {
                             self.active_watcher = Some(handle);
                             if let Some(ref mut active_profile) = self.active_profile {
@@ -114,14 +114,13 @@ impl AppState {
                         }
                     }
                 } else {
-                    self.config.backup_dir = profile.backup_dir.clone();
                     self.invalidate_backup_cache();
                     self.selected_backup_filename = None;
                     self.reload_backup_history();
-            self.set_success_message(format!(
-                "Template '{}' selecionado — aguardando '{}'",
-                template_name, proc_name
-            ));
+                    self.set_success_message(format!(
+                        "Template '{}' selecionado — aguardando '{}'",
+                        template_name, proc_name
+                    ));
                 }
             }
         } else {
@@ -136,6 +135,11 @@ impl AppState {
 
     /// Inicia o monitoramento
     pub fn start_monitoring(&mut self) {
+        let last_backup_time = self.last_backup_time_before_restore.take();
+        self.start_monitoring_with_last_backup_time(last_backup_time);
+    }
+
+    fn start_monitoring_with_last_backup_time(&mut self, last_backup_time: Option<u64>) {
         // Valida se tem perfil ativo
         if self.active_profile.is_none() {
             self.set_error_message("Selecione um template primeiro".to_string());
@@ -148,11 +152,13 @@ impl AppState {
             return;
         }
 
+        let resolved_backup_dir = self.get_backup_dir();
+
         // Pega o perfil ativo
         if let Some(profile) = &mut self.active_profile {
-            if profile.backup_dir.is_empty() {
+            if resolved_backup_dir.is_empty() {
                 self.error_message =
-                    Some("Configure o diretório de backup no template".to_string());
+                    Some("Configure o diretório de backup padrão em Configurações".to_string());
                 return;
             }
 
@@ -179,8 +185,11 @@ impl AppState {
 
             profile.is_active = true;
 
-            // Clone apenas uma vez para enviar para thread (necessário)
-            match crate::watcher::start_watching(profile.clone(), self.egui_ctx.clone()) {
+            // Resolve diretório de backup antes de enviar para a thread
+            let mut profile_for_watcher = profile.clone();
+            profile_for_watcher.backup_dir = resolved_backup_dir;
+
+            match crate::watcher::start_watching(profile_for_watcher, self.egui_ctx.clone(), last_backup_time) {
                 Ok(handle) => {
                     self.active_watcher = Some(handle);
                     self.set_success_message("Monitoramento iniciado".to_string());
@@ -215,14 +224,7 @@ impl AppState {
             return;
         }
 
-        // Obtém backup_dir do perfil ativo
-        let backup_dir = if let Some(ref profile) = self.active_profile {
-            profile.backup_dir.clone()
-        } else {
-            self.set_error_message("Nenhum perfil ativo".to_string());
-            return;
-        };
-
+        let backup_dir = self.get_backup_dir();
         if backup_dir.is_empty() {
             self.set_error_message("Diretório de backup não configurado".to_string());
             return;
@@ -233,6 +235,7 @@ impl AppState {
         // Para o monitoramento temporariamente
         let was_monitoring = self.active_watcher.is_some();
         if was_monitoring {
+            self.last_backup_time_before_restore = self.active_watcher.as_ref().map(|h| h.last_backup_time());
             self.stop_monitoring();
         }
 
@@ -246,6 +249,17 @@ impl AppState {
             Ok(_) => {
                 self.set_success_message(format!("Backup '{}' restaurado", filename));
                 self.update_save_info();
+
+                let backup_dir_path = std::path::Path::new(&backup_dir);
+                if let Ok(entries) = std::fs::read_dir(backup_dir_path) {
+                    for entry in entries.flatten() {
+                        if let Some(name) = entry.file_name().to_str() {
+                            if name.starts_with("BeforeRestore_") && name.ends_with(".zip") {
+                                let _ = std::fs::remove_file(entry.path());
+                            }
+                        }
+                    }
+                }
 
                 // Reinicia monitoramento se estava ativo
                 if was_monitoring {
@@ -262,12 +276,7 @@ impl AppState {
 
     /// Exclui um backup permanentemente (arquivo ZIP e screenshot PNG)
     pub fn delete_backup(&mut self, filename: &str) {
-        let backup_dir = if let Some(ref profile) = self.active_profile {
-            profile.backup_dir.clone()
-        } else {
-            self.config.backup_dir.clone()
-        };
-
+        let backup_dir = self.get_backup_dir();
         if backup_dir.is_empty() {
             self.set_error_message("Diretório de backup não configurado".to_string());
             return;
@@ -308,6 +317,50 @@ impl AppState {
         }
     }
 
+    pub fn rename_backup(&mut self, old_filename: &str, new_name: &str) {
+        let backup_dir = self.get_backup_dir();
+        if backup_dir.is_empty() {
+            self.set_error_message("Diretório de backup não configurado".to_string());
+            return;
+        }
+
+        let backup_dir_path = std::path::Path::new(&backup_dir);
+        let old_zip = backup_dir_path.join(old_filename);
+        let old_png = backup_dir_path.join(old_filename).with_extension("png");
+
+        let safe_name = new_name.trim().replace(" ", "_");
+        if safe_name.is_empty() {
+            self.set_error_message("Nome inválido".to_string());
+            return;
+        }
+
+        let new_zip_name = format!("{}.zip", safe_name);
+        let new_zip = backup_dir_path.join(&new_zip_name);
+
+        if new_zip.exists() {
+            self.set_error_message("Já existe um backup com esse nome".to_string());
+            return;
+        }
+
+        if let Err(e) = std::fs::rename(&old_zip, &new_zip) {
+            self.set_error_message(format!("Erro ao renomear backup: {}", e));
+            return;
+        }
+
+        let new_png = backup_dir_path.join(&safe_name).with_extension("png");
+        if old_png.exists() {
+            let _ = std::fs::rename(&old_png, &new_png);
+        }
+
+        if self.selected_backup_filename.as_deref() == Some(old_filename) {
+            self.selected_backup_filename = Some(new_zip_name.clone());
+        }
+        self.screenshot_textures.remove(old_filename);
+        self.invalidate_backup_cache();
+        self.reload_backup_history();
+        self.set_success_message(format!("Backup renomeado para '{}'", safe_name));
+    }
+
     /// Cria um safety backup (BeforeRestore) do estado atual do save
     fn create_safety_backup(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let save_path = std::path::Path::new(&self.current_save_path);
@@ -315,11 +368,11 @@ impl AppState {
             return Err("Diretório de save não existe".into());
         }
 
-        let backup_dir = if let Some(ref profile) = self.active_profile {
-            std::path::Path::new(&profile.backup_dir)
-        } else {
-            return Err("Nenhum perfil ativo".into());
-        };
+        let backup_dir_str = self.get_backup_dir();
+        if backup_dir_str.is_empty() {
+            return Err("Diretório de backup não configurado".into());
+        }
+        let backup_dir = std::path::Path::new(&backup_dir_str);
 
         let now = chrono::Local::now();
         let timestamp = now.format("%d-%m-%Y_%H-%M-%S").to_string();
