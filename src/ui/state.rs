@@ -77,6 +77,7 @@ pub struct AppState {
 
     // Timer não-bloqueante para reinício de monitoramento após restore
     pub restart_monitoring_after: Option<std::time::Instant>,
+    pub last_backup_time_before_restore: Option<u64>,
 
     // Rastreia o último backup já refletido na UI para atualização automática
     last_seen_backup_time: u64,
@@ -84,6 +85,10 @@ pub struct AppState {
     pub last_ui_update: std::time::Instant,
     pub selected_backup_filename: Option<String>,
     pub screenshot_textures: std::collections::HashMap<String, eframe::egui::TextureHandle>,
+
+    pub rename_dialog_open: bool,
+    pub rename_old_filename: Option<String>,
+    pub rename_new_name: String,
 
     pub egui_ctx: eframe::egui::Context,
 }
@@ -149,10 +154,14 @@ impl AppState {
                 original_backup_max_count: 50,
             },
             restart_monitoring_after: None,
+            last_backup_time_before_restore: None,
             last_seen_backup_time: 0,
             last_ui_update: std::time::Instant::now(),
             selected_backup_filename: None,
             screenshot_textures: std::collections::HashMap::new(),
+            rename_dialog_open: false,
+            rename_old_filename: None,
+            rename_new_name: String::new(),
             egui_ctx,
         };
 
@@ -171,18 +180,10 @@ impl AppState {
             }
         }
 
-        // Obtém backup_dir do perfil ativo (ou usa config.backup_dir se não houver perfil)
-        let backup_dir_str = if let Some(ref profile) = self.active_profile {
-            if profile.backup_dir.is_empty() {
-                return;
-            }
-            profile.backup_dir.clone()
-        } else {
-            if self.config.backup_dir.is_empty() {
-                return;
-            }
-            self.config.backup_dir.clone()
-        };
+        let backup_dir_str = self.get_backup_dir();
+        if backup_dir_str.is_empty() {
+            return;
+        }
 
         let backup_dir = std::path::Path::new(&backup_dir_str);
         if !backup_dir.exists() {
@@ -204,7 +205,7 @@ impl AppState {
                 if let Ok(metadata) = entry.metadata() {
                     if metadata.is_file() {
                         if let Some(filename) = entry.file_name().to_str() {
-                            if filename.ends_with(".zip") {
+                            if filename.ends_with(".zip") && !filename.starts_with("BeforeRestore_") {
                                 backups.push(BackupEntry {
                                     filename: filename.to_string(),
                                     created_at: metadata
@@ -415,7 +416,9 @@ impl AppState {
 
                     if let Some(ref proc_name) = profile.process_name {
                         if crate::ui::actions::monitoring::is_process_running(proc_name) {
-                            match crate::watcher::start_watching(profile, self.egui_ctx.clone()) {
+                            let mut profile_for_watcher = profile.clone();
+                            profile_for_watcher.backup_dir = self.get_backup_dir();
+                            match crate::watcher::start_watching(profile_for_watcher, self.egui_ctx.clone(), None) {
                                 Ok(handle) => {
                                     self.active_watcher = Some(handle);
                                     if let Some(ref mut active_profile) = self.active_profile {
@@ -447,7 +450,9 @@ impl AppState {
                             return;
                         }
                     } else {
-                        match crate::watcher::start_watching(profile, self.egui_ctx.clone()) {
+                        let mut profile_for_watcher = profile.clone();
+                        profile_for_watcher.backup_dir = self.get_backup_dir();
+                        match crate::watcher::start_watching(profile_for_watcher, self.egui_ctx.clone(), None) {
                             Ok(handle) => {
                                 self.active_watcher = Some(handle);
                                 if let Some(ref mut active_profile) = self.active_profile {
@@ -507,6 +512,13 @@ impl AppState {
         if let Some(ref profile) = self.active_profile {
             if !profile.backup_dir.is_empty() {
                 return profile.backup_dir.clone();
+            }
+            if !self.config.backup_dir.is_empty() {
+                let safe_name = profile.name.replace(" ", "_");
+                return std::path::Path::new(&self.config.backup_dir)
+                    .join(&safe_name)
+                    .to_string_lossy()
+                    .to_string();
             }
         }
         self.config.backup_dir.clone()

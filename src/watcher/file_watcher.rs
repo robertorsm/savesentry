@@ -33,15 +33,20 @@ impl FileWatcher {
         last_backup_time: Arc<AtomicU64>,
         backup_max_count: u32,
         backup_recursive: bool,
+        initial_last_backup_time: Option<u64>,
     ) -> Self {
         let exclude_pattern = exclude_pattern_str.and_then(|s| glob::Pattern::new(&s).ok());
         let save_pattern = save_pattern_str.and_then(|s| glob::Pattern::new(&s).ok());
+
+        let last_backup = initial_last_backup_time.and_then(|t| {
+            SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(t))
+        });
 
         Self {
             save_path,
             backup_dir,
             backup_delay_minutes,
-            last_backup: None,
+            last_backup,
             exclude_pattern,
             save_pattern,
             last_backup_time,
@@ -219,9 +224,17 @@ impl FileWatcher {
             return Err("Nenhum arquivo encontrado para backup".into());
         }
 
-        Self::rotate_backups_with_count(backup_dir, backup_max_count as usize)?;
+        // Só rotaciona backups automáticos (sem nome customizado)
+        // Safety backups e backups manuais não contam para o limite
+        if custom_name.is_none() {
+            Self::rotate_backups_with_count(backup_dir, backup_max_count as usize)?;
+        }
 
         Ok(backup_path)
+    }
+
+    fn is_auto_backup_name(name: &str) -> bool {
+        name.starts_with("backup_") && name.ends_with(".zip")
     }
 
     fn rotate_backups_with_count(
@@ -237,13 +250,18 @@ impl FileWatcher {
                     .map(|ext| ext.eq_ignore_ascii_case("zip"))
                     .unwrap_or(false)
             })
+            .filter(|e| {
+                e.file_name()
+                    .to_str()
+                    .map(Self::is_auto_backup_name)
+                    .unwrap_or(false)
+            })
             .collect();
 
         if entries.len() <= max_backups {
             return Ok(());
         }
 
-        // Ordena por data de modificação (mais antigo primeiro)
         entries.sort_by(|a, b| {
             let time_a = a
                 .metadata()
@@ -256,10 +274,14 @@ impl FileWatcher {
             time_a.cmp(&time_b)
         });
 
-        // Remove os mais antigos
         let to_remove = entries.len() - max_backups;
         for entry in entries.iter().take(to_remove) {
-            let _ = fs::remove_file(entry.path());
+            let path = entry.path();
+            let _ = fs::remove_file(&path);
+            let png_path = path.with_extension("png");
+            if png_path.exists() {
+                let _ = fs::remove_file(&png_path);
+            }
         }
 
         Ok(())

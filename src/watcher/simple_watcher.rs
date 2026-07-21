@@ -66,10 +66,11 @@ impl WatcherHandle {
 pub fn start_watching(
     profile: GameProfile,
     ctx: eframe::egui::Context,
+    initial_last_backup_time: Option<u64>,
 ) -> Result<WatcherHandle, Box<dyn std::error::Error>> {
     let profile_id = profile.id;
     let _profile_name = profile.name.clone();
-    let _profile_name_for_monitor = _profile_name.clone(); // Clone para usar na segunda closure
+    let _profile_name_for_monitor = _profile_name.clone();
     let save_path = PathBuf::from(&profile.save_path);
     let backup_dir = PathBuf::from(&profile.backup_dir);
     let backup_delay_minutes = profile.backup_delay_minutes;
@@ -78,12 +79,10 @@ pub fn start_watching(
     let process_name = profile.process_name.clone();
     let ctx_clone = ctx.clone();
 
-    // Flag compartilhada: indica se deve monitorar arquivo
-    // Se process_name existe, começar desabilitado até processo ser detectado
     let should_monitor = Arc::new(AtomicBool::new(process_name.is_none()));
     let should_monitor_clone = Arc::clone(&should_monitor);
 
-    let last_backup_time = Arc::new(AtomicU64::new(0));
+    let last_backup_time = Arc::new(AtomicU64::new(initial_last_backup_time.unwrap_or(0)));
     let last_backup_time_clone = Arc::clone(&last_backup_time);
 
     let recent_save = Arc::new(Mutex::new(None));
@@ -104,6 +103,7 @@ pub fn start_watching(
             last_backup_time_clone,
             profile.backup_max_count,
             profile.backup_recursive,
+            initial_last_backup_time,
         );
 
         // Cria canal para receber eventos do notify
