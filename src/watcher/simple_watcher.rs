@@ -91,8 +91,10 @@ pub fn start_watching(
     let process_running = Arc::new(AtomicBool::new(true));
     let process_running_clone = Arc::clone(&process_running);
 
-    // Thread de file watching
-    let file_watcher_handle = thread::spawn(move || {
+    let file_watcher_handle = thread::Builder::new()
+        .name("file_watcher".into())
+        .stack_size(512 * 1024)
+        .spawn(move || {
         // Cria o FileWatcher
         let mut file_watcher = FileWatcher::new(
             save_path.clone(),
@@ -270,12 +272,15 @@ pub fn start_watching(
             "Watcher encerrado para perfil {} (ID: {})",
             _profile_name, profile_id
         );
-    });
+        }).unwrap();
 
     let process_monitor_handle = if let Some(proc_name) = process_name {
         let should_monitor_clone = Arc::clone(&should_monitor);
 
-        Some(thread::spawn(move || {
+        Some(thread::Builder::new()
+            .name("process_monitor".into())
+            .stack_size(512 * 1024)
+            .spawn(move || {
             let proc_name_lower = proc_name.to_lowercase();
 
             #[cfg(debug_assertions)]
@@ -284,10 +289,11 @@ pub fn start_watching(
                 proc_name, _profile_name_for_monitor
             );
 
-            loop {
-                use sysinfo::{ProcessesToUpdate, System};
+            let mut system = sysinfo::System::new();
 
-                let mut system = System::new();
+            loop {
+                use sysinfo::ProcessesToUpdate;
+
                 system.refresh_processes(ProcessesToUpdate::All, true);
 
                 let found = system.processes().values().find(|p| {
@@ -318,9 +324,8 @@ pub fn start_watching(
                     {
                         loop {
                             thread::sleep(std::time::Duration::from_secs(5));
-                            let mut sys = sysinfo::System::new();
-                            sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-                            if !sys.processes().values().any(|p| {
+                            system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+                            if !system.processes().values().any(|p| {
                                 p.name().to_string_lossy().to_lowercase() == proc_name_lower
                             }) {
                                 break;
@@ -338,7 +343,7 @@ pub fn start_watching(
 
                 thread::sleep(std::time::Duration::from_secs(2));
             }
-        }))
+        }).unwrap())
     } else {
         None
     };

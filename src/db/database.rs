@@ -22,6 +22,8 @@ impl Database {
             .run(&mut conn)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
+        conn.execute_batch("PRAGMA cache_size = -512;")?;
+
         #[cfg(debug_assertions)]
         println!("Migrations aplicadas com sucesso!");
 
