@@ -127,5 +127,22 @@ impl eframe::App for App {
 
         // Renderiza página ativa baseada na aba selecionada
         pages::render_active_page(ui, &mut self.state);
+
+        if self.state.screenshot_popup_open {
+            let screen_rect = ui.ctx().input(|i| {
+                i.viewport().inner_rect.unwrap_or_else(|| {
+                    eframe::egui::Rect::from_min_size(
+                        eframe::egui::Pos2::new(0.0, 0.0),
+                        eframe::egui::Vec2::new(10000.0, 10000.0),
+                    )
+                })
+            });
+            ui.painter().rect_filled(
+                screen_rect,
+                0.0,
+                eframe::egui::Color32::from_black_alpha(160),
+            );
+            ui.allocate_rect(screen_rect, eframe::egui::Sense::click());
+        }
     }
 }

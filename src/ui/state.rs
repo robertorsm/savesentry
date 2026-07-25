@@ -90,6 +90,9 @@ pub struct AppState {
     pub rename_old_filename: Option<String>,
     pub rename_new_name: String,
 
+    pub screenshot_popup_open: bool,
+    pub screenshot_popup_filename: Option<String>,
+
     pub egui_ctx: eframe::egui::Context,
 }
 
@@ -104,6 +107,8 @@ pub struct BackupEntry {
 }
 
 impl AppState {
+    const MAX_CACHED_SCREENSHOTS: usize = 1;
+
     /// Cria um novo estado da aplicação
     pub fn new(db_path: std::path::PathBuf, egui_ctx: eframe::egui::Context) -> Self {
         // Inicializa banco de dados
@@ -162,6 +167,8 @@ impl AppState {
             rename_dialog_open: false,
             rename_old_filename: None,
             rename_new_name: String::new(),
+            screenshot_popup_open: false,
+            screenshot_popup_filename: None,
             egui_ctx,
         };
 
@@ -527,12 +534,22 @@ impl AppState {
         self.config.backup_dir.clone()
     }
 
-    pub fn load_screenshot_texture(
+    fn add_screenshot_texture(&mut self, filename: String, handle: eframe::egui::TextureHandle) {
+        if self.screenshot_textures.len() >= Self::MAX_CACHED_SCREENSHOTS {
+            let first_key = self.screenshot_textures.keys().next().cloned().unwrap();
+            self.screenshot_textures.remove(&first_key);
+        }
+        self.screenshot_textures.insert(filename, handle);
+    }
+
+    fn load_screenshot_texture_inner(
         &mut self,
         ctx: &eframe::egui::Context,
         filename: &str,
+        extension: &str,
+        cache_key: &str,
     ) -> Option<eframe::egui::TextureHandle> {
-        if let Some(tex) = self.screenshot_textures.get(filename) {
+        if let Some(tex) = self.screenshot_textures.get(cache_key) {
             return Some(tex.clone());
         }
 
@@ -543,7 +560,7 @@ impl AppState {
 
         let path = std::path::Path::new(&backup_dir)
             .join(filename)
-            .with_extension("png");
+            .with_extension(extension);
         if !path.exists() {
             return None;
         }
@@ -554,13 +571,84 @@ impl AppState {
         let color_image = eframe::egui::ColorImage::from_rgba_unmultiplied(size, &rgba);
 
         let texture = ctx.load_texture(
-            filename,
+            cache_key,
             color_image,
             eframe::egui::TextureOptions::default(),
         );
 
-        self.screenshot_textures
-            .insert(filename.to_string(), texture.clone());
+        self.add_screenshot_texture(cache_key.to_string(), texture.clone());
         Some(texture)
+    }
+
+    pub fn load_screenshot_texture(
+        &mut self,
+        ctx: &eframe::egui::Context,
+        filename: &str,
+    ) -> Option<eframe::egui::TextureHandle> {
+        let cache_key = format!("{}#thumb", filename);
+        self.load_screenshot_texture_inner(ctx, filename, "thumb.png", &cache_key)
+    }
+
+    pub fn load_screenshot_texture_fullres(
+        &mut self,
+        ctx: &eframe::egui::Context,
+        filename: &str,
+    ) -> Option<eframe::egui::TextureHandle> {
+        let cache_key = format!("{}#full", filename);
+        self.load_screenshot_texture_inner(ctx, filename, "png", &cache_key)
+    }
+
+    pub fn load_screenshot_texture_adaptive(
+        &mut self,
+        ctx: &eframe::egui::Context,
+        filename: &str,
+        max_width: f32,
+        max_height: f32,
+    ) -> Option<eframe::egui::TextureHandle> {
+        let backup_dir = self.get_backup_dir();
+        if backup_dir.is_empty() {
+            return None;
+        }
+
+        let thumb_path = std::path::Path::new(&backup_dir)
+            .join(filename)
+            .with_extension("thumb.png");
+        let fullres_path = std::path::Path::new(&backup_dir)
+            .join(filename)
+            .with_extension("png");
+
+        let (thumb_w, thumb_h) = if thumb_path.exists() {
+            image::image_dimensions(&thumb_path).unwrap_or((320, 180))
+        } else {
+            (0, 0)
+        };
+
+        let (full_w, full_h) = if fullres_path.exists() {
+            image::image_dimensions(&fullres_path).unwrap_or((1920, 1080))
+        } else {
+            (0, 0)
+        };
+
+        let aspect = if full_w > 0 && full_h > 0 {
+            full_w as f32 / full_h as f32
+        } else if thumb_w > 0 && thumb_h > 0 {
+            thumb_w as f32 / thumb_h as f32
+        } else {
+            16.0 / 9.0
+        };
+
+        let width = max_width.min(max_height * aspect);
+        let height = width / aspect;
+
+        let needs_fullres = thumb_w == 0
+            || thumb_h == 0
+            || width > thumb_w as f32
+            || height > thumb_h as f32;
+
+        if needs_fullres && fullres_path.exists() {
+            self.load_screenshot_texture_fullres(ctx, filename)
+        } else {
+            self.load_screenshot_texture(ctx, filename)
+        }
     }
 }
