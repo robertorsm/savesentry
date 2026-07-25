@@ -299,7 +299,7 @@ fn system_time_to_zip_datetime(time: SystemTime) -> Option<zip::DateTime> {
     zip::DateTime::from_date_and_time(year, month, day, hour, minute, second).ok()
 }
 
-/// Captura screenshot do monitor principal e salva como BMP
+/// Captura screenshot do monitor principal e salva como PNG full-res + thumbnail
 pub fn capture_screenshot(backup_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
     use screenshots::Screen;
 
@@ -313,6 +313,12 @@ pub fn capture_screenshot(backup_path: &std::path::Path) -> Result<(), Box<dyn s
 
     let screenshot_path = backup_path.with_extension("png");
     image.save(&screenshot_path)?;
+
+    let thumb_path = backup_path.with_extension("thumb.png");
+    if let Ok(img) = image::open(&screenshot_path) {
+        let thumb = img.resize(320, 180, image::imageops::FilterType::Lanczos3);
+        let _ = thumb.save(&thumb_path);
+    }
 
     Ok(())
 }

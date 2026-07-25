@@ -152,18 +152,76 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
             ui.add_space(4.0);
 
             let max_width = ui.available_width();
-            let max_height = ui.available_height().min(280.0);
+            let max_height = (ui.available_height() - 24.0).max(100.0);
 
-            if let Some(texture) = state.load_screenshot_texture(ui.ctx(), &filename) {
+            if let Some(texture) = state.load_screenshot_texture_adaptive(ui.ctx(), &filename, max_width, max_height) {
                 let [tex_w, tex_h] = texture.size();
                 let aspect = tex_w as f32 / tex_h as f32;
                 let width = max_width.min(max_height * aspect);
                 let height = width / aspect;
 
-                ui.centered_and_justified(|ui| {
-                    ui.add(egui::Image::new(&texture).fit_to_exact_size(egui::vec2(width, height)));
+                let img_response = ui.centered_and_justified(|ui| {
+                    ui.add(
+                        egui::Image::new(&texture)
+                            .fit_to_exact_size(egui::vec2(width, height))
+                            .sense(egui::Sense::click()),
+                    )
                 });
+
+                if img_response.inner.clicked() {
+                    state.screenshot_popup_open = true;
+                    state.screenshot_popup_filename = Some(filename.clone());
+                }
             }
+        }
+    }
+
+    if state.screenshot_popup_open {
+        let mut do_close = false;
+
+        egui::Window::new("Visualização Completa")
+            .collapsible(false)
+            .resizable(true)
+            .order(egui::Order::Foreground)
+            .default_size([960.0, 540.0])
+            .show(ui.ctx(), |ui| {
+                ui.vertical(|ui| {
+                    if let Some(popup_filename) = state.screenshot_popup_filename.clone() {
+                        if let Some(texture) = state.load_screenshot_texture_fullres(ui.ctx(), &popup_filename) {
+                            let available = ui.available_size();
+                            let [tex_w, tex_h] = texture.size();
+                            let aspect = tex_w as f32 / tex_h as f32;
+                            let width = available.x.min((available.y - 48.0) * aspect);
+                            let height = width / aspect;
+
+                            ui.add_space(4.0);
+                            ui.vertical_centered(|ui| {
+                                ui.add(
+                                    egui::Image::new(&texture)
+                                        .fit_to_exact_size(egui::vec2(width, height)),
+                                );
+                            });
+                        }
+                    }
+
+                    ui.add_space(12.0);
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("Fechar").clicked() {
+                                do_close = true;
+                            }
+                        });
+                    });
+                });
+
+                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    do_close = true;
+                }
+            });
+
+        if do_close {
+            state.screenshot_popup_open = false;
+            state.screenshot_popup_filename = None;
         }
     }
 }
