@@ -25,7 +25,6 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
     }
 
     if !state.backup_history.is_empty() {
-        let mut clicked_restore: Option<String> = None;
         let mut delete_backup: Option<String> = None;
         let backup_dir_str = state.get_backup_dir();
         let backup_dir = std::path::Path::new(&backup_dir_str);
@@ -42,8 +41,6 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                     } else {
                         ui.style().visuals.widgets.inactive.weak_bg_fill
                     };
-
-                    let mut btn_rect: Option<egui::Rect> = None;
 
                     let response = egui::Frame::group(ui.style())
                         .inner_margin(6.0)
@@ -74,35 +71,17 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                                 ui.label(egui::RichText::new("📷 Screenshot").weak().size(10.0));
                             }
 
-                            ui.add_space(4.0);
-
-                            let restore_button = egui::Button::new("Restaurar")
-                                .fill(egui::Color32::from_rgb(60, 100, 140))
-                                .min_size(egui::vec2(ui.available_width(), 22.0));
-
-                            let btn = ui
-                                .add(restore_button)
-                                .on_hover_text("Restaurar este backup");
-                            btn_rect = Some(btn.rect);
                         })
                         .response;
 
-                    // Detecta clique no botão via input bruto (evita competição com .interact no frame)
-                    let btn_clicked = ui.input(|i| {
-                        let pointer = &i.pointer;
-                        if let Some(pos) = pointer.interact_pos() {
-                            if pointer.primary_clicked() && btn_rect.is_some_and(|r| r.contains(pos)) {
-                                return true;
-                            }
-                        }
-                        false
-                    });
-                    if btn_clicked {
-                        clicked_restore = Some(backup.filename.clone());
-                    }
-
                     let frame_response = response.interact(egui::Sense::click());
                     frame_response.context_menu(|ui| {
+                        if ui.button("↩ Restaurar").clicked() {
+                            state.restore_target_filename = Some(backup.filename.clone());
+                            state.restore_dialog_open = true;
+                            state.restore_dialog_focus_cancel = false;
+                            ui.close();
+                        }
                         if ui.button("✏ Renomear").clicked() {
                             let current_name = backup
                                 .filename
@@ -119,31 +98,123 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                         }
                     });
 
-                    // Detecta clique no frame (excluindo o botão) via input bruto
                     let frame_clicked = ui.input(|i| {
                         let pointer = &i.pointer;
                         if let Some(pos) = pointer.interact_pos() {
                             if pointer.primary_clicked() && response.rect.contains(pos) {
-                                let on_button = btn_rect.is_some_and(|r| r.contains(pos));
-                                return !on_button;
+                                return true;
                             }
                         }
                         false
                     });
-                    if frame_clicked && clicked_restore.is_none() {
+                    if frame_clicked {
                         state.selected_backup_filename = Some(backup.filename.clone());
+                    }
+
+                    let frame_double_clicked = ui.input(|i| {
+                        let pointer = &i.pointer;
+                        if let Some(pos) = pointer.interact_pos() {
+                            if pointer.button_double_clicked(egui::PointerButton::Primary) && response.rect.contains(pos) {
+                                return true;
+                            }
+                        }
+                        false
+                    });
+                    if frame_double_clicked {
+                        state.restore_target_filename = Some(backup.filename.clone());
+                        state.restore_dialog_open = true;
+                        state.restore_dialog_focus_cancel = false;
                     }
 
                     ui.add_space(3.0);
                 }
             });
 
-        if let Some(filename) = clicked_restore {
-            state.restore_backup(&filename);
-        }
-
         if let Some(filename) = delete_backup {
             state.delete_backup(&filename);
+        }
+
+        if state.restore_dialog_open {
+            let mut do_restore = false;
+            let mut do_cancel = false;
+
+            let screen_rect = ui.ctx().input(|i| i.raw.screen_rect).unwrap_or_else(|| ui.max_rect());
+            egui::Area::new(egui::Id::new("restore_modal_overlay"))
+                .fixed_pos(screen_rect.min)
+                .show(ui.ctx(), |ui| {
+                    ui.set_min_size(screen_rect.size());
+                    let overlay_response = ui.allocate_rect(screen_rect, egui::Sense::click());
+                    ui.painter().rect_filled(
+                        screen_rect,
+                        0.0,
+                        egui::Color32::from_rgba_premultiplied(0, 0, 0, 160),
+                    );
+                    overlay_response
+                });
+
+            egui::Window::new("Confirmar Restauração")
+                .collapsible(false)
+                .resizable(false)
+                .movable(false)
+                .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                .show(ui.ctx(), |ui| {
+                    ui.set_min_width(280.0);
+                    ui.label("Deseja restaurar este backup?");
+                    if let Some(ref filename) = state.restore_target_filename {
+                        let label = format_backup_label(filename);
+                        ui.label(egui::RichText::new(label).strong().size(13.0));
+                    }
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let cancel_btn = ui.button("Cancelar");
+                            let ok_btn = ui.button("Ok");
+
+                            if cancel_btn.clicked() {
+                                do_cancel = true;
+                            }
+                            if ok_btn.clicked() {
+                                do_restore = true;
+                            }
+
+                            if state.restore_dialog_focus_cancel {
+                                if cancel_btn.has_focus()
+                                    && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                                {
+                                    do_cancel = true;
+                                }
+                                if ui.input(|i| i.key_pressed(egui::Key::Tab)) {
+                                    state.restore_dialog_focus_cancel = false;
+                                }
+                            } else {
+                                if (ok_btn.has_focus()
+                                    && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                                    || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                                {
+                                    do_restore = true;
+                                }
+                                if ui.input(|i| i.key_pressed(egui::Key::Tab)) {
+                                    state.restore_dialog_focus_cancel = true;
+                                }
+                            }
+                        });
+                    });
+                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                        do_cancel = true;
+                    }
+                });
+
+            if do_restore {
+                if let Some(filename) = state.restore_target_filename.take() {
+                    state.restore_backup(&filename);
+                }
+                state.restore_dialog_open = false;
+                state.restore_dialog_focus_cancel = false;
+            } else if do_cancel {
+                state.restore_dialog_open = false;
+                state.restore_target_filename = None;
+                state.restore_dialog_focus_cancel = false;
+            }
         }
 
         if state.rename_dialog_open {

@@ -90,6 +90,10 @@ pub struct AppState {
     pub rename_old_filename: Option<String>,
     pub rename_new_name: String,
 
+    pub restore_dialog_open: bool,
+    pub restore_target_filename: Option<String>,
+    pub restore_dialog_focus_cancel: bool,
+
     pub screenshot_popup_open: bool,
     pub screenshot_popup_filename: Option<String>,
 
@@ -167,6 +171,9 @@ impl AppState {
             rename_dialog_open: false,
             rename_old_filename: None,
             rename_new_name: String::new(),
+            restore_dialog_open: false,
+            restore_target_filename: None,
+            restore_dialog_focus_cancel: false,
             screenshot_popup_open: false,
             screenshot_popup_filename: None,
             egui_ctx,
