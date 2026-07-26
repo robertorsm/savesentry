@@ -242,15 +242,13 @@ SaveSentry uses it under the Apache-2.0 terms.
 
 ## Distribuição
 
-Ao distribuir o binário do SaveSentry, os seguintes arquivos devem ser
-incluídos no pacote:
+O pacote ZIP de release contém apenas o executável principal:
 
 - `SaveSentry.exe` — O executável principal
+
+As licenças permanecem disponíveis no repositório do projeto:
 - `LICENSE` — Licença MIT do SaveSentry
 - `THIRD-PARTY-LICENSES.md` — Atribuições e licenças das dependências
-
-O script `build-windows.ps1` já inclui automaticamente esses arquivos no ZIP
-de release.
 
 ## Nota
 
