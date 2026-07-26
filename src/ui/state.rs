@@ -219,7 +219,8 @@ impl AppState {
                 if let Ok(metadata) = entry.metadata() {
                     if metadata.is_file() {
                         if let Some(filename) = entry.file_name().to_str() {
-                            if filename.ends_with(".zip") && !filename.starts_with("BeforeRestore_") {
+                            if filename.ends_with(".zip") && !filename.starts_with("BeforeRestore_")
+                            {
                                 backups.push(BackupEntry {
                                     filename: filename.to_string(),
                                     created_at: metadata
@@ -375,13 +376,15 @@ impl AppState {
     pub fn set_success_message(&mut self, msg: impl Into<String>) {
         self.success_message = Some(msg.into());
         self.error_message = None;
-        self.message_expires_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+        self.message_expires_at =
+            Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
     }
 
     pub fn set_error_message(&mut self, msg: impl Into<String>) {
         self.error_message = Some(msg.into());
         self.success_message = None;
-        self.message_expires_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+        self.message_expires_at =
+            Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
     }
 
     /// Limpa o formulário de template
@@ -435,7 +438,11 @@ impl AppState {
                         if crate::ui::actions::monitoring::is_process_running(proc_name) {
                             let mut profile_for_watcher = profile.clone();
                             profile_for_watcher.backup_dir = self.get_backup_dir();
-                            match crate::watcher::start_watching(profile_for_watcher, self.egui_ctx.clone(), None) {
+                            match crate::watcher::start_watching(
+                                profile_for_watcher,
+                                self.egui_ctx.clone(),
+                                None,
+                            ) {
                                 Ok(handle) => {
                                     self.active_watcher = Some(handle);
                                     if let Some(ref mut active_profile) = self.active_profile {
@@ -469,7 +476,11 @@ impl AppState {
                     } else {
                         let mut profile_for_watcher = profile.clone();
                         profile_for_watcher.backup_dir = self.get_backup_dir();
-                        match crate::watcher::start_watching(profile_for_watcher, self.egui_ctx.clone(), None) {
+                        match crate::watcher::start_watching(
+                            profile_for_watcher,
+                            self.egui_ctx.clone(),
+                            None,
+                        ) {
                             Ok(handle) => {
                                 self.active_watcher = Some(handle);
                                 if let Some(ref mut active_profile) = self.active_profile {
@@ -647,10 +658,8 @@ impl AppState {
         let width = max_width.min(max_height * aspect);
         let height = width / aspect;
 
-        let needs_fullres = thumb_w == 0
-            || thumb_h == 0
-            || width > thumb_w as f32
-            || height > thumb_h as f32;
+        let needs_fullres =
+            thumb_w == 0 || thumb_h == 0 || width > thumb_w as f32 || height > thumb_h as f32;
 
         if needs_fullres && fullres_path.exists() {
             self.load_screenshot_texture_fullres(ctx, filename)

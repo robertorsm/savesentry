@@ -10,9 +10,10 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
         return;
     }
 
-    let profile_data = state.active_profile.as_ref().map(|p| {
-        (p.is_active, p.backup_delay_minutes, p.backup_max_count)
-    });
+    let profile_data = state
+        .active_profile
+        .as_ref()
+        .map(|p| (p.is_active, p.backup_delay_minutes, p.backup_max_count));
 
     let has_file = !state.current_save_file.is_empty();
 
@@ -50,13 +51,17 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
                 .as_ref()
                 .and_then(|w| w.remaining_backup_seconds(delay_minutes));
 
-            let (auto_count, pinned_count) = state.backup_history.iter().fold((0usize, 0usize), |(auto, pinned), b| {
-                if b.filename.starts_with("backup_") && b.filename.ends_with(".zip") {
-                    (auto + 1, pinned)
-                } else {
-                    (auto, pinned + 1)
-                }
-            });
+            let (auto_count, pinned_count) =
+                state
+                    .backup_history
+                    .iter()
+                    .fold((0usize, 0usize), |(auto, pinned), b| {
+                        if b.filename.starts_with("backup_") && b.filename.ends_with(".zip") {
+                            (auto + 1, pinned)
+                        } else {
+                            (auto, pinned + 1)
+                        }
+                    });
             let max_count = max_count as usize;
             let count_color = if auto_count >= max_count {
                 egui::Color32::from_rgb(220, 80, 80)
@@ -154,7 +159,9 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
             let max_width = ui.available_width();
             let max_height = (ui.available_height() - 24.0).max(100.0);
 
-            if let Some(texture) = state.load_screenshot_texture_adaptive(ui.ctx(), &filename, max_width, max_height) {
+            if let Some(texture) =
+                state.load_screenshot_texture_adaptive(ui.ctx(), &filename, max_width, max_height)
+            {
                 let [tex_w, tex_h] = texture.size();
                 let aspect = tex_w as f32 / tex_h as f32;
                 let width = max_width.min(max_height * aspect);
@@ -187,7 +194,9 @@ pub fn render_save_info(ui: &mut egui::Ui, state: &mut AppState) {
             .show(ui.ctx(), |ui| {
                 ui.vertical(|ui| {
                     if let Some(popup_filename) = state.screenshot_popup_filename.clone() {
-                        if let Some(texture) = state.load_screenshot_texture_fullres(ui.ctx(), &popup_filename) {
+                        if let Some(texture) =
+                            state.load_screenshot_texture_fullres(ui.ctx(), &popup_filename)
+                        {
                             let available = ui.available_size();
                             let [tex_w, tex_h] = texture.size();
                             let aspect = tex_w as f32 / tex_h as f32;
