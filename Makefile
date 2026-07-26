@@ -23,7 +23,7 @@ help:
 	@$(PWSH) -Command "$(CYAN) '=== SaveSentry - Comandos Disponíveis ==='"
 	@$(PWSH) -Command "$(YELLOW) ''"
 	@$(PWSH) -Command "$(YELLOW) 'Build e Release:'"
-	@$(PWSH) -Command "Write-Host '  make build-windows    - Build otimizado para Windows (release)'"
+	@$(PWSH) -Command "Write-Host '  make build-windows    - Build otimizado para Windows (inclui validação)'""
 	@$(PWSH) -Command "Write-Host '  make dev              - Build debug rápido para desenvolvimento'"
 	@$(PWSH) -Command "Write-Host '  make run              - Executar aplicação em modo debug'"
 	@$(PWSH) -Command "Write-Host '  make install          - Build e copiar executável para diretório local'"
@@ -61,7 +61,7 @@ icon:
 #==============================================================================
 # Build para Windows (Release otimizado)
 #==============================================================================
-build-windows: icon
+build-windows: validate icon
 	@$(PWSH) -File "build-windows.ps1" -Profile "$(RELEASE_PROFILE)" -Project "$(PROJECT_NAME)"
 
 #==============================================================================

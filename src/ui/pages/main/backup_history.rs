@@ -49,11 +49,7 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                             ui.set_min_width(ui.available_width());
 
                             let label = format_backup_label(&backup.filename);
-                            ui.label(
-                                egui::RichText::new(label)
-                                    .strong()
-                                    .size(12.0),
-                            );
+                            ui.label(egui::RichText::new(label).strong().size(12.0));
 
                             ui.add_space(2.0);
 
@@ -70,7 +66,6 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                                 ui.add_space(2.0);
                                 ui.label(egui::RichText::new("📷 Screenshot").weak().size(10.0));
                             }
-
                         })
                         .response;
 
@@ -114,7 +109,9 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                     let frame_double_clicked = ui.input(|i| {
                         let pointer = &i.pointer;
                         if let Some(pos) = pointer.interact_pos() {
-                            if pointer.button_double_clicked(egui::PointerButton::Primary) && response.rect.contains(pos) {
+                            if pointer.button_double_clicked(egui::PointerButton::Primary)
+                                && response.rect.contains(pos)
+                            {
                                 return true;
                             }
                         }
@@ -138,7 +135,10 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
             let mut do_restore = false;
             let mut do_cancel = false;
 
-            let screen_rect = ui.ctx().input(|i| i.raw.screen_rect).unwrap_or_else(|| ui.max_rect());
+            let screen_rect = ui
+                .ctx()
+                .input(|i| i.raw.screen_rect)
+                .unwrap_or_else(|| ui.max_rect());
             egui::Area::new(egui::Id::new("restore_modal_overlay"))
                 .fixed_pos(screen_rect.min)
                 .show(ui.ctx(), |ui| {
@@ -267,12 +267,18 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
 }
 
 fn format_backup_label(filename: &str) -> String {
-    if let Some(stem) = filename.strip_prefix("backup_").and_then(|s| s.strip_suffix(".zip")) {
+    if let Some(stem) = filename
+        .strip_prefix("backup_")
+        .and_then(|s| s.strip_suffix(".zip"))
+    {
         if let Some((date_part, time_part)) = stem.split_once('_') {
             let date = date_part.replace('-', "/");
             let time = time_part.replace('-', ":");
             return format!("backup {} {}", date, time);
         }
     }
-    filename.strip_suffix(".zip").unwrap_or(filename).to_string()
+    filename
+        .strip_suffix(".zip")
+        .unwrap_or(filename)
+        .to_string()
 }

@@ -66,7 +66,10 @@ impl eframe::App for App {
         }
 
         if let Some(ref watcher) = self.state.active_watcher {
-            if !watcher.process_running.load(std::sync::atomic::Ordering::Relaxed) {
+            if !watcher
+                .process_running
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
                 self.state.stop_monitoring();
             }
         }

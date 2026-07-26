@@ -38,9 +38,8 @@ impl FileWatcher {
         let exclude_pattern = exclude_pattern_str.and_then(|s| glob::Pattern::new(&s).ok());
         let save_pattern = save_pattern_str.and_then(|s| glob::Pattern::new(&s).ok());
 
-        let last_backup = initial_last_backup_time.and_then(|t| {
-            SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(t))
-        });
+        let last_backup = initial_last_backup_time
+            .and_then(|t| SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(t)));
 
         Self {
             save_path,

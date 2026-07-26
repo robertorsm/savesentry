@@ -95,7 +95,11 @@ impl AppState {
                 if is_process_running(proc_name) {
                     let mut profile_for_watcher = profile.clone();
                     profile_for_watcher.backup_dir = self.get_backup_dir();
-                    match crate::watcher::start_watching(profile_for_watcher, self.egui_ctx.clone(), None) {
+                    match crate::watcher::start_watching(
+                        profile_for_watcher,
+                        self.egui_ctx.clone(),
+                        None,
+                    ) {
                         Ok(handle) => {
                             self.active_watcher = Some(handle);
                             if let Some(ref mut active_profile) = self.active_profile {
@@ -198,7 +202,11 @@ impl AppState {
             let mut profile_for_watcher = profile.clone();
             profile_for_watcher.backup_dir = resolved_backup_dir;
 
-            match crate::watcher::start_watching(profile_for_watcher, self.egui_ctx.clone(), last_backup_time) {
+            match crate::watcher::start_watching(
+                profile_for_watcher,
+                self.egui_ctx.clone(),
+                last_backup_time,
+            ) {
                 Ok(handle) => {
                     self.active_watcher = Some(handle);
                     if !silent {
@@ -248,7 +256,8 @@ impl AppState {
         // Para o monitoramento temporariamente
         let was_monitoring = self.active_watcher.is_some();
         if was_monitoring {
-            self.last_backup_time_before_restore = self.active_watcher.as_ref().map(|h| h.last_backup_time());
+            self.last_backup_time_before_restore =
+                self.active_watcher.as_ref().map(|h| h.last_backup_time());
             self.stop_monitoring();
         }
 

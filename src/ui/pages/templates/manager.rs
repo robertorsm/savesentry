@@ -217,9 +217,9 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
 
             ui.horizontal(|ui| {
                 if state.template_form.is_new {
-                        let can_create = !state.template_form.name.trim().is_empty()
-                            && !state.template_form.save_dir.trim().is_empty()
-                            && !state.template_form.process.trim().is_empty();
+                    let can_create = !state.template_form.name.trim().is_empty()
+                        && !state.template_form.save_dir.trim().is_empty()
+                        && !state.template_form.process.trim().is_empty();
 
                     if ui
                         .add_enabled(
