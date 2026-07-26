@@ -24,20 +24,6 @@ if (Test-Path $exePath) {
     }
 
     $filesToZip = @($exePath)
-    $licenseFile = "LICENSE"
-    $thirdPartyFile = "THIRD-PARTY-LICENSES.md"
-
-    if (Test-Path $licenseFile) {
-        $filesToZip += $licenseFile
-    } else {
-        Write-Host "Aviso: $licenseFile nao encontrado" -ForegroundColor Yellow
-    }
-
-    if (Test-Path $thirdPartyFile) {
-        $filesToZip += $thirdPartyFile
-    } else {
-        Write-Host "Aviso: $thirdPartyFile nao encontrado" -ForegroundColor Yellow
-    }
 
     Compress-Archive -Path $filesToZip -DestinationPath $zipPath -Force
 
