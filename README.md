@@ -20,22 +20,27 @@ Monitore seus arquivos de save em tempo real e crie backups automáticos em form
 
 ## 📋 Sobre
 
-**SaveSentry** é uma aplicação desktop nativa desenvolvida em Rust que monitora automaticamente seus arquivos de save games e cria backups compactados sempre que detecta modificações. Com uma interface moderna e intuitiva, permite gerenciar múltiplos perfis de backup com configurações individualizadas.
+**SaveSentry** é uma aplicação desktop nativa desenvolvida em Rust que monitora automaticamente seus arquivos de save games e cria backups compactados sempre que detecta modificações. Com uma interface moderna e intuitiva, permite gerenciar perfis de backup com configurações individualizadas — um perfil ativo por vez.
 
 ### ✨ Características
 
 - 🔄 **Monitoramento em Tempo Real**: Detecta mudanças nos arquivos de save automaticamente
 - 📦 **Backups Compactados**: Cria arquivos ZIP com timestamp para fácil identificação
 - ⏱️ **Controle de Timeout**: Configure intervalos mínimos entre backups para evitar excesso
-- 🎮 **Templates Pré-configurados**: Suporte para jogos populares com paths automáticos
-- 🎯 **Filtros de Exclusão**: Use regex para excluir arquivos temporários ou indesejados
+- 🎮 **Templates Pré-configurados**: 11 jogos populares com paths e processos automáticos
+- 🎯 **Filtros de Exclusão**: Use glob patterns para excluir arquivos temporários ou indesejados
 - 💾 **Modo Portátil**: Banco de dados local, sem dependências do sistema
 - 🖥️ **Interface Nativa**: UI responsiva e moderna com egui
 - 🌙 **Tema Escuro**: Interface otimizada para longas sessões
 - 🎮 **Monitoramento por Processo**: Só monitora quando o jogo está em execução
+- 📸 **Captura de Screenshots**: Salva screenshot do momento do backup com thumbnail e visualização full-res
+- 🔄 **Restauração de Backups**: Restaure saves anteriores com backup de segurança automático
+- ✏️ **Renomear Backups**: Marque backups importantes com nomes personalizados (não são rotacionados)
+- 📊 **Limite de Backups**: Rotação automática com limite configurável (padrão: 50 automáticos)
+- 📁 **Diretório de Backup Padrão**: Configure uma pasta base para organizar backups automaticamente em subpastas por jogo
 - 🛡️ **Ícone Personalizado**: Logo de sentinela embutido no executável
 - 📦 **Build ZIP Automático**: Gera pacote ZIP pronto para distribuição
-- ⚡ **Ultra Leve**: Executável otimizado, consumo mínimo de recursos
+- ⚡ **Ultra Leve**: Executável otimizado (~5.5 MB), consumo mínimo de recursos
 
 ## 🚀 Instalação
 
@@ -81,8 +86,10 @@ make build-windows
 3. **Configure seu perfil**
    - Nome do jogo
    - Localização do arquivo de save
-   - Diretório onde os backups serão salvos
+   - Diretório onde os backups serão salvos (ou use o diretório padrão)
    - Intervalo mínimo entre backups (em minutos)
+   - Padrão de exclusão (opcional, para ignorar arquivos temporários)
+   - Nome do processo (opcional, para monitorar apenas quando o jogo está rodando)
 
 4. **Inicie o monitoramento**
    - Clique em "Criar Perfil"
@@ -93,25 +100,52 @@ make build-windows
 
 - **Iniciar/Parar**: Alterna monitoramento do perfil
 - **Excluir**: Remove perfil permanentemente
+- **Editar**: Altere nome, paths, timeout, exclusões e processo
 - **Status**: 
   - 🟢 Monitorando: Backup ativo
   - ⚫ Inativo: Aguardando ativação
 
+### Gerenciamento de Backups
+
+Na aba principal, o painel de histórico mostra todos os backups do perfil ativo:
+
+- **Screenshot**: Thumbnail da tela no momento do backup — clique para visualização full-res
+- **Restaurar**: Clique com botão direito no backup → "Restaurar" (cria backup de segurança `BeforeRestore_` automaticamente)
+- **Renomear**: Clique com botão direito → "Renomear" para marcar como favorito (não será rotacionado)
+- **Excluir**: Clique com botão direito → "Excluir"
+- **Contadores**: "Backups:" mostra automáticos vs limite; "Fixados:" mostra renomeados
+
 ### Templates Suportados
 
-Templates pré-configurados para jogos populares incluem expansão automática de variáveis:
+Templates pré-configurados para 11 jogos populares com expansão automática de variáveis:
 - `%APPDATA%` - Dados de aplicação do usuário
 - `%USERPROFILE%` - Pasta home do usuário
 - `%LOCALAPPDATA%` - Dados locais da aplicação
+- `%STEAM_USERDATA%` - Pasta userdata do Steam (detectado automaticamente)
+- `%STEAMID%` - ID da conta Steam (primeira pasta numérica em userdata)
+- `%PROGRAMFILES%` e `%PROGRAMFILES(X86)%` - Programas
+- `%PROGRAMDATA%` - Dados compartilhados entre usuários
+- `%PUBLIC%` - Pasta pública
+- `%TEMP%` / `%TMP%` - Pasta temporária
+- `%HOMEDRIVE%` / `%HOMEPATH%` - Drive e caminho home
 
 ### Formato dos Backups
 
-Os backups são criados com nomenclatura padronizada:
+Os backups automáticos usam nomenclatura padronizada:
 ```
 backup_DD-MM-YYYY_HH-MM-SS.zip
 ```
 
 Exemplo: `backup_24-11-2025_15-30-45.zip`
+
+Backups renomeados mantêm o nome escolhido pelo usuário e não entram na rotação automática.
+
+### Aba Configurações
+
+Acesse a terceira aba para ajustes globais:
+
+- **Diretório padrão de backup**: Pasta base usada quando o perfil não define um diretório específico (organiza automaticamente em subpastas por jogo)
+- **Configurações gerais**: Preferências de comportamento do app
 
 ## 🏗️ Arquitetura
 
@@ -153,10 +187,14 @@ O projeto utiliza **Immediate Mode UI** com arquitetura simples e direta:
 | Database | rusqlite | 0.39.0 | Persistência SQLite |
 | Migrations | refinery | 0.9.2 | Schema versioning |
 | File Monitoring | notify | 9.0.0-rc.4 | File system watching |
-| Compression | zip | 9.0.0-pre2 | Criação de backups |
+| Compression | zip | 0.6 | Criação de backups ZIP |
 | Date/Time | chrono | 0.4.45 | Timestamps |
-| Pattern Matching | regex | 1.12.4 | Filtros de exclusão |
+| Pattern Matching | glob | 0.3 | Filtros de exclusão (glob patterns) |
 | File Dialog | rfd | 0.17.2 | Diálogos de arquivo nativos |
+| Process Info | sysinfo | 0.39.5 | Detecção de processos do jogo |
+| Screenshots | screenshots + image | 0.8 + 0.24 | Captura de tela no backup |
+| Error Handling | anyhow | 1.0.103 | Tratamento de erros Rust |
+| Icon Resource | winresource | 0.1 | Ícone no executável Windows |
 
 ### Padrões de Projeto
 
@@ -164,10 +202,11 @@ O projeto utiliza **Immediate Mode UI** com arquitetura simples e direta:
 - **Immediate Mode UI**: Renderização e lógica unificadas
 - **Observer Pattern**: File watching com threads
 - **Factory Method**: Criação de perfis e templates
-- **Strategy Pattern**: Filtros configuráveis com regex
+- **Strategy Pattern**: Filtros configuráveis com glob patterns
 - **Thread-based Background**: Watchers em threads separadas
 - **Component Pattern**: UI modular com componentes reutilizáveis
 - **Pure Functions**: Views sem side effects para testabilidade
+- **LRU Cache**: Cache de screenshots com limite de memória GPU
 
 
 ## 💻 Desenvolvimento
@@ -210,10 +249,10 @@ SaveSentry/
 │   ├── db/                     # Infrastructure layer
 │   │   ├── mod.rs
 │   │   ├── database.rs         # Repository
-│   │   └── migrations/         # SQL migrations (V1-V4)
+│   │   └── migrations/         # SQL migrations (V1 consolidado)
 │   └── watcher/                # Background processing
 │       ├── mod.rs
-│       ├── file_watcher.rs     # Lógica de backup e ZIP
+│       ├── file_watcher.rs     # Lógica de backup, ZIP e screenshots
 │       ├── simple_watcher.rs   # Thread-based watching
 │       └── process_monitor.rs  # Monitoramento de processos
 ├── assets/                     # Ícones e imagens
@@ -255,6 +294,9 @@ make build-windows    # Gera icone + compila + cria ZIP
 cargo run
 make run
 
+# Instalar executável localmente (copia para bin/)
+make install
+
 # Verificar qualidade (linter)
 cargo clippy --all-targets --all-features -- -D warnings
 make clippy
@@ -267,11 +309,39 @@ make fmt
 cargo test
 make test
 
-# Validação completa (fmt + clippy + check)
+# Validação completa (fmt --check + clippy + check)
 make validate
+
+# Pipeline completo (validate + build-windows)
+make all
+
+# Release completo (validate + build + test-perf)
+make release-full
+
+# Testes de performance
+make test-perf
 
 # Gerar icone ICO a partir do PNG
 make icon
+
+# Verificar tamanho do executável
+make size
+
+# Relatório de dependências
+make deps-report
+
+# Verificar atualizações disponíveis
+make deps-outdated
+
+# Atualizar dependências
+make update-deps
+
+# Limpeza de artefatos
+make clean
+make clean-all    # Limpeza completa (inclui Cargo.lock)
+
+# Ajuda com todos os comandos
+make help
 ```
 
 ### Build de Release
@@ -293,7 +363,7 @@ rpath = false          # Não incluir rpath
 inherits = "release"   # Herdar configurações base do perfil release
 ```
 
-Resultado: Executável compacto (~7-8 MB) e altamente otimizado.
+Resultado: Executável compacto (~5.5-6 MB) e altamente otimizado.
 
 ### Build com Make (Recomendado)
 
@@ -306,13 +376,21 @@ make build-windows
 
 ### Adicionar Novo Template
 
-1. Crie uma nova migration (ex: `V5__add_meujogo_template.sql`):
+1. Edite a migration `V1__initial_schema.sql` na seção de seeds (apenas em desenvolvimento local):
 ```sql
-INSERT INTO game_templates (name, save_directory, process_name, save_pattern, is_official)
-VALUES ('Meu Jogo', '%APPDATA%\MeuJogo\saves', 'jogo.exe', '*.sav', 1);
+INSERT INTO game_templates (
+    name, save_directory, process_name, save_pattern, exclude_pattern,
+    default_exclude_pattern, backup_dir, backup_delay_minutes, backup_max_count,
+    version, is_official, created_at
+)
+VALUES (
+    'Meu Jogo', '%APPDATA%\MeuJogo\saves', 'jogo.exe', '*.sav', NULL,
+    'steam_autocloud.vdf', '%USERPROFILE%\SaveSentry\Meu Jogo',
+    5, 50, 1, 1, datetime('now')
+);
 ```
 
-> **Nota:** Nunca edite migrations existentes (V1-V4). Sempre crie uma nova migration.
+> **Nota:** Em produção, crie uma nova migration (ex: `V2__add_meujogo_template.sql`). Nunca edite migrations já aplicadas em bancos de dados existentes.
 
 2. Recompile - migrations são aplicadas automaticamente
 
@@ -345,21 +423,39 @@ pub struct AppState {
 
 ### Variáveis de Ambiente
 
-O sistema expande automaticamente:
-- `%APPDATA%` → `C:\Users\[User]\AppData\Roaming`
-- `%LOCALAPPDATA%` → `C:\Users\[User]\AppData\Local`
-- `%USERPROFILE%` → `C:\Users\[User]`
+O sistema expande automaticamente variáveis do Windows e paths do Steam:
 
-### Regex de Exclusão
+| Variável | Exemplo Expandido | Fonte |
+|----------|------------------|-------|
+| `%APPDATA%` | `C:\Users\User\AppData\Roaming` | Windows env |
+| `%LOCALAPPDATA%` | `C:\Users\User\AppData\Local` | Windows env |
+| `%USERPROFILE%` | `C:\Users\User` | Windows env |
+| `%USERNAME%` | `User` | Windows env |
+| `%HOMEDRIVE%` | `C:` | Windows env |
+| `%HOMEPATH%` | `\Users\User` | Windows env |
+| `%PROGRAMFILES%` | `C:\Program Files` | Windows env |
+| `%PROGRAMFILES(X86)%` | `C:\Program Files (x86)` | Windows env |
+| `%PROGRAMDATA%` | `C:\ProgramData` | Windows env |
+| `%PUBLIC%` | `C:\Users\Public` | Windows env |
+| `%TEMP%` / `%TMP%` | `C:\Users\User\AppData\Local\Temp` | Windows env |
+| `%STEAM_USERDATA%` | `C:\Program Files (x86)\Steam\userdata` | Detectado em runtime |
+| `%STEAMID%` | `76561198000000000` | Primeira pasta numérica em `userdata/` |
 
-Exemplos de padrões úteis:
+> **Detecção Steam**: O app busca `Steam\userdata` em `%LOCALAPPDATA%`, `%ProgramFiles(x86)%`, `%ProgramFiles%` e `%USERPROFILE%`, usando a primeira subpasta totalmente numérica como SteamID.
 
-```regex
-.*\.tmp$           # Exclui arquivos .tmp
-.*_backup.*        # Exclui arquivos com "_backup"
-^temp.*            # Exclui arquivos começando com "temp"
-.*(cache|log).*    # Exclui arquivos com "cache" ou "log"
+### Filtros de Exclusão (Glob Patterns)
+
+Use padrões glob (não regex) para excluir arquivos:
+
 ```
+*.tmp              # Exclui arquivos .tmp
+*_backup*          # Exclui arquivos com "_backup"
+temp*              # Exclui arquivos começando com "temp"
+*cache*            # Exclui arquivos com "cache"
+session.lock       # Exclui arquivo específico
+```
+
+Use `|` para múltiplos padrões: `*.tmp|*.lock|temp*`
 
 ### Modo Debug
 
@@ -375,7 +471,8 @@ cargo run
 ### Métricas
 
 - **Tempo de startup**: ~2-3 segundos
-- **Consumo de memória**: ~50-100 MB
+- **Tamanho do executável**: ~5.5 MB
+- **Consumo de memória**: ~30-50 MB
 - **CPU (idle)**: < 1%
 - **CPU (durante backup)**: ~30-50% (temporário)
 - **Detecção de mudanças**: < 100ms (via notify/inotify)
@@ -383,6 +480,10 @@ cargo run
 ### Otimizações
 
 - Cache de templates em memória
+- LRU cache de screenshots (máx. 1 full-res + 2 thumbs na GPU)
+- Reutilização de `sysinfo::System` (evita recriação a cada poll)
+- SQLite cache reduzido para 512KB
+- Threads de watcher com stack de 512KB
 - Stream lazy para processamento de eventos
 - HashMap para lookup O(1) de watchers
 - Zero-cost abstractions do Rust
@@ -414,11 +515,16 @@ icacls SaveSentry.exe
 2. Timeout ainda não expirou
 3. Arquivo não foi modificado
 4. Filtro de exclusão está bloqueando
+5. Processo do jogo não está em execução (se configurado)
+6. Limite de backups foi atingido e rotação falhou
 
 **Verificação**:
 ```powershell
 # Confirmar que arquivo foi modificado
 Get-Item "caminho\do\save.sav" | Select-Object LastWriteTime
+
+# Verificar se processo está rodando (ex: StardewValley.exe)
+Get-Process | Where-Object { $_.ProcessName -like "*Stardew*" }
 ```
 
 ### Aplicação lenta
