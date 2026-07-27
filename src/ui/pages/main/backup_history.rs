@@ -71,12 +71,14 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
 
                     let frame_response = response.interact(egui::Sense::click());
                     frame_response.context_menu(|ui| {
+                        state.selected_backup_filename = Some(backup.filename.clone());
                         if ui.button("↩ Restaurar").clicked() {
                             state.restore_target_filename = Some(backup.filename.clone());
                             state.restore_dialog_open = true;
                             state.restore_dialog_focus_cancel = false;
                             ui.close();
                         }
+                        ui.separator();
                         if ui.button("✏ Renomear").clicked() {
                             let current_name = backup
                                 .filename
@@ -87,8 +89,21 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                             state.rename_dialog_open = true;
                             ui.close();
                         }
+                        ui.separator();
                         if ui.button("🗑 Excluir").clicked() {
                             delete_backup = Some(backup.filename.clone());
+                            ui.close();
+                        }
+                        ui.separator();
+                        if ui.button("📁 Abrir local do arquivo").clicked() {
+                            let backup_path = backup_dir.join(&backup.filename);
+                            if backup_path.exists() {
+                                let path_str = backup_path.to_string_lossy().to_string();
+                                let _ = std::process::Command::new("explorer")
+                                    .arg("/select,")
+                                    .arg(path_str)
+                                    .spawn();
+                            }
                             ui.close();
                         }
                     });
