@@ -1,4 +1,5 @@
 use chrono::{Datelike, Timelike};
+use image::ImageEncoder;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -298,7 +299,6 @@ fn system_time_to_zip_datetime(time: SystemTime) -> Option<zip::DateTime> {
     zip::DateTime::from_date_and_time(year, month, day, hour, minute, second).ok()
 }
 
-/// Captura screenshot do monitor principal e salva como PNG full-res + thumbnail
 pub fn capture_screenshot(backup_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
     use screenshots::Screen;
 
@@ -308,16 +308,68 @@ pub fn capture_screenshot(backup_path: &std::path::Path) -> Result<(), Box<dyn s
     }
 
     let screen = &screens[0];
-    let image = screen.capture()?;
+    let image_buffer = screen.capture()?;
+    let dynamic = image::DynamicImage::ImageRgba8(image_buffer);
 
     let screenshot_path = backup_path.with_extension("png");
-    image.save(&screenshot_path)?;
+    let file = std::fs::File::create(&screenshot_path)?;
+    let encoder = image::codecs::png::PngEncoder::new_with_quality(
+        file,
+        image::codecs::png::CompressionType::Fast,
+        image::codecs::png::FilterType::Adaptive,
+    );
+    encoder.write_image(
+        dynamic.as_bytes(),
+        dynamic.width(),
+        dynamic.height(),
+        image::ColorType::Rgba8,
+    )?;
 
     let thumb_path = backup_path.with_extension("thumb.png");
-    if let Ok(img) = image::open(&screenshot_path) {
-        let thumb = img.resize(320, 180, image::imageops::FilterType::Lanczos3);
-        let _ = thumb.save(&thumb_path);
-    }
+    let thumb = dynamic.resize(320, 180, image::imageops::FilterType::Triangle);
+    let _ = thumb.save(&thumb_path);
 
     Ok(())
+}
+
+/// Associa um screenshot capturado previamente (pending_screenshot) a um backup criado.
+/// Se não houver screenshot pendente, captura um novo no momento do backup.
+pub fn associate_pending_screenshot(backup_path: &std::path::Path, backup_dir: &std::path::Path) {
+    let pending_png = backup_dir.join("pending_screenshot.png");
+    let pending_thumb = backup_dir.join("pending_screenshot.thumb.png");
+
+    if pending_png.exists() {
+        if let Some(stem) = backup_path.file_stem() {
+            let target_png = backup_dir.join(stem).with_extension("png");
+            let target_thumb = backup_dir.join(stem).with_extension("thumb.png");
+            let _ = std::fs::rename(&pending_png, &target_png);
+            let _ = std::fs::rename(&pending_thumb, &target_thumb);
+        }
+    } else {
+        let _ = capture_screenshot(backup_path);
+    }
+}
+
+pub struct ScreenshotWorker {
+    sender: std::sync::mpsc::Sender<std::path::PathBuf>,
+}
+
+impl ScreenshotWorker {
+    pub fn new() -> Self {
+        let (sender, receiver) = std::sync::mpsc::channel::<std::path::PathBuf>();
+        std::thread::Builder::new()
+            .name("screenshot_worker".into())
+            .stack_size(512 * 1024)
+            .spawn(move || {
+                while let Ok(path) = receiver.recv() {
+                    let _ = capture_screenshot(&path);
+                }
+            })
+            .unwrap();
+        Self { sender }
+    }
+
+    pub fn capture(&self, path: std::path::PathBuf) {
+        let _ = self.sender.send(path);
+    }
 }
