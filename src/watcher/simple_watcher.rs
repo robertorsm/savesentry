@@ -111,8 +111,12 @@ pub fn start_watching(
                 initial_last_backup_time,
             );
 
-            // Cria worker thread dedicada para screenshots (evita spawn efêmero)
-            let screenshot_worker = crate::watcher::file_watcher::ScreenshotWorker::new();
+            let last_backup_for_screenshot: std::sync::Arc<std::sync::Mutex<Option<std::path::PathBuf>>> =
+                std::sync::Arc::new(std::sync::Mutex::new(None));
+
+            let screenshot_worker = crate::watcher::file_watcher::ScreenshotWorker::new(
+                std::sync::Arc::clone(&last_backup_for_screenshot)
+            );
 
             // Cria canal para receber eventos do notify
             let (tx, rx) = mpsc::channel();
@@ -144,9 +148,11 @@ pub fn start_watching(
 
             let debounce_duration = std::time::Duration::from_secs(3);
             let mut deadline: Option<std::time::Instant> = None;
-            let mut last_backup_path: Option<std::path::PathBuf> = None;
             let mut last_screenshot_time: Option<std::time::Instant> = None;
             const SCREENSHOT_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(5);
+            let screenshot_delay = std::time::Duration::from_secs(profile.screenshot_delay_seconds as u64);
+
+            crate::watcher::file_watcher::cleanup_pending_screenshot(&backup_dir);
 
             loop {
                 let should_process = should_monitor_clone.load(Ordering::Relaxed);
@@ -166,7 +172,7 @@ pub fn start_watching(
                                         "✅ Backup criado: {:?} (Perfil: {})",
                                         backup_path, _profile_name
                                     );
-                                    last_backup_path = Some(backup_path);
+                                    *last_backup_for_screenshot.lock().unwrap() = Some(backup_path);
                                     ctx_clone.request_repaint();
                                 }
                                 Err(e) => {
@@ -179,7 +185,7 @@ pub fn start_watching(
 
                             #[cfg(not(debug_assertions))]
                             if let Ok(backup_path) = file_watcher.create_backup(&save_path) {
-                                last_backup_path = Some(backup_path);
+                                *last_backup_for_screenshot.lock().unwrap() = Some(backup_path);
                                 ctx_clone.request_repaint();
                             }
                             file_watcher.set_pending(false);
@@ -238,8 +244,9 @@ pub fn start_watching(
                                     if should_capture {
                                         last_screenshot_time = Some(now);
                                         let _ = std::fs::create_dir_all(&backup_dir);
+                                        crate::watcher::file_watcher::cleanup_pending_screenshot(&backup_dir);
                                         let pending_path = backup_dir.join("pending_screenshot");
-                                        screenshot_worker.capture(pending_path);
+                                        screenshot_worker.capture(pending_path, screenshot_delay);
                                     }
                                     // Reseta deadline (sliding debounce)
                                     deadline = Some(std::time::Instant::now() + debounce_duration);
@@ -265,7 +272,7 @@ pub fn start_watching(
                                         "✅ Backup criado (debounce): {:?} (Perfil: {})",
                                         backup_path, _profile_name
                                     );
-                                    last_backup_path = Some(backup_path);
+                                    *last_backup_for_screenshot.lock().unwrap() = Some(backup_path);
                                     ctx_clone.request_repaint();
                                 }
                                 Err(e) => {
@@ -278,7 +285,7 @@ pub fn start_watching(
 
                             #[cfg(not(debug_assertions))]
                             if let Ok(backup_path) = file_watcher.create_backup(&save_path) {
-                                last_backup_path = Some(backup_path);
+                                *last_backup_for_screenshot.lock().unwrap() = Some(backup_path);
                                 ctx_clone.request_repaint();
                             }
                             file_watcher.set_pending(false);
@@ -290,11 +297,6 @@ pub fn start_watching(
                     }
                 }
 
-                // Associa screenshot pendente ao backup criado
-                if let Some(ref path) = last_backup_path {
-                    crate::watcher::file_watcher::associate_pending_screenshot(path, &backup_dir);
-                    last_backup_path = None;
-                }
             }
 
             #[cfg(debug_assertions)]

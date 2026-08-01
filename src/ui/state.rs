@@ -22,6 +22,7 @@ pub struct TemplateForm {
     pub save_dir: String,
     pub backup_dir: String,
     pub backup_delay_minutes: u32,
+    pub screenshot_delay_seconds: u32,
     pub backup_max_count: u32,
     pub process: String,
     pub pattern: String,
@@ -33,6 +34,7 @@ pub struct TemplateForm {
     pub original_pattern: String,
     pub original_exclude: String,
     pub original_backup_delay_minutes: u32,
+    pub original_screenshot_delay_seconds: u32,
     pub original_backup_max_count: u32,
 }
 
@@ -149,6 +151,7 @@ impl AppState {
                 save_dir: String::new(),
                 backup_dir: String::new(),
                 backup_delay_minutes: 5,
+                screenshot_delay_seconds: 0,
                 backup_max_count: 50,
                 process: String::new(),
                 pattern: String::from("*.*"),
@@ -160,6 +163,7 @@ impl AppState {
                 original_pattern: String::new(),
                 original_exclude: String::new(),
                 original_backup_delay_minutes: 5,
+                original_screenshot_delay_seconds: 0,
                 original_backup_max_count: 50,
             },
             restart_monitoring_after: None,
@@ -394,6 +398,7 @@ impl AppState {
         self.template_form.save_dir.clear();
         self.template_form.backup_dir.clear();
         self.template_form.backup_delay_minutes = 5;
+        self.template_form.screenshot_delay_seconds = 0;
         self.template_form.backup_max_count = 50;
         self.template_form.process.clear();
         self.template_form.pattern = String::from("*.*");
@@ -405,6 +410,7 @@ impl AppState {
         self.template_form.original_pattern.clear();
         self.template_form.original_exclude.clear();
         self.template_form.original_backup_delay_minutes = 5;
+        self.template_form.original_screenshot_delay_seconds = 0;
         self.template_form.original_backup_max_count = 50;
     }
 
@@ -417,89 +423,15 @@ impl AppState {
     }
 
     fn restore_last_profile(&mut self) {
-        if let Ok((last_profile_id, last_backup_dir, last_backup_delay)) = self.db.get_app_state() {
+        if let Ok((last_template_id, last_backup_dir, last_backup_delay)) = self.db.get_app_state() {
             if let Some(dir) = last_backup_dir {
                 self.config.backup_dir = dir;
             }
             self.config.backup_delay_minutes = last_backup_delay;
 
-            if let Some(profile_id) = last_profile_id {
-                if let Ok(profile) = self.db.get_game_profile(profile_id) {
-                    self.active_profile = Some(profile.clone());
-                    self.selected_template_id = profile.template_id;
-                    self.current_save_path = profile.save_path.clone();
-                    self.current_save_file.clear();
-                    self.update_save_info();
-
-                    #[cfg(debug_assertions)]
-                    println!("📋 Restored last profile: {}", profile.name);
-
-                    if let Some(ref proc_name) = profile.process_name {
-                        if crate::ui::actions::monitoring::is_process_running(proc_name) {
-                            let mut profile_for_watcher = profile.clone();
-                            profile_for_watcher.backup_dir = self.get_backup_dir();
-                            match crate::watcher::start_watching(
-                                profile_for_watcher,
-                                self.egui_ctx.clone(),
-                                None,
-                            ) {
-                                Ok(handle) => {
-                                    self.active_watcher = Some(handle);
-                                    if let Some(ref mut active_profile) = self.active_profile {
-                                        active_profile.is_active = true;
-                                    }
-                                    self.invalidate_backup_cache();
-                                    self.reload_backup_history();
-
-                                    #[cfg(debug_assertions)]
-                                    println!(
-                                        "✅ Auto-started watcher for process: {:?}",
-                                        self.active_profile.as_ref().unwrap().process_name
-                                    );
-                                    return;
-                                }
-                                Err(e) => {
-                                    self.error_message =
-                                        Some(format!("Falha ao iniciar watcher: {}", e));
-                                    self.active_profile = None;
-                                    self.selected_template_id = None;
-                                    self.current_save_path.clear();
-                                }
-                            }
-                        } else {
-                            self.success_message = Some(format!(
-                                "Perfil '{}' restaurado — aguardando '{}'",
-                                profile.name, proc_name
-                            ));
-                            return;
-                        }
-                    } else {
-                        let mut profile_for_watcher = profile.clone();
-                        profile_for_watcher.backup_dir = self.get_backup_dir();
-                        match crate::watcher::start_watching(
-                            profile_for_watcher,
-                            self.egui_ctx.clone(),
-                            None,
-                        ) {
-                            Ok(handle) => {
-                                self.active_watcher = Some(handle);
-                                if let Some(ref mut active_profile) = self.active_profile {
-                                    active_profile.is_active = true;
-                                }
-                                self.invalidate_backup_cache();
-                                self.reload_backup_history();
-                                return;
-                            }
-                            Err(e) => {
-                                self.error_message =
-                                    Some(format!("Falha ao iniciar watcher: {}", e));
-                                self.active_profile = None;
-                                self.selected_template_id = None;
-                                self.current_save_path.clear();
-                            }
-                        }
-                    }
-                }
+            if let Some(template_id) = last_template_id {
+                self.select_template(template_id);
+                return;
             }
         }
 

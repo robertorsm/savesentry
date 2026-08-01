@@ -11,6 +11,7 @@ impl AppState {
             self.template_form.save_dir = template.save_directory.clone();
             self.template_form.backup_dir = template.backup_dir.clone();
             self.template_form.backup_delay_minutes = template.backup_delay_minutes;
+            self.template_form.screenshot_delay_seconds = template.screenshot_delay_seconds;
             self.template_form.backup_max_count = template.backup_max_count;
             self.template_form.process = template.process_name.clone();
             self.template_form.pattern = template.save_pattern.clone();
@@ -19,6 +20,7 @@ impl AppState {
             self.template_form.original_save_dir = template.save_directory.clone();
             self.template_form.original_backup_dir = template.backup_dir.clone();
             self.template_form.original_backup_delay_minutes = template.backup_delay_minutes;
+            self.template_form.original_screenshot_delay_seconds = template.screenshot_delay_seconds;
             self.template_form.original_backup_max_count = template.backup_max_count;
             self.template_form.original_process = template.process_name.clone();
             self.template_form.original_pattern = template.save_pattern.clone();
@@ -58,6 +60,7 @@ impl AppState {
             None, // default_exclude_pattern não é configurável pelo usuário
             &self.template_form.backup_dir,
             self.template_form.backup_delay_minutes,
+            self.template_form.screenshot_delay_seconds,
             self.template_form.backup_max_count,
         ) {
             Ok(_) => {
@@ -96,6 +99,8 @@ impl AppState {
                 || self.template_form.exclude != self.template_form.original_exclude
                 || self.template_form.backup_delay_minutes
                     != self.template_form.original_backup_delay_minutes
+                || self.template_form.screenshot_delay_seconds
+                    != self.template_form.original_screenshot_delay_seconds
                 || self.template_form.backup_max_count
                     != self.template_form.original_backup_max_count;
 
@@ -109,6 +114,7 @@ impl AppState {
                 None, // default_exclude_pattern não é configurável pelo usuário (apenas oficiais)
                 &self.template_form.backup_dir,
                 self.template_form.backup_delay_minutes,
+                self.template_form.screenshot_delay_seconds,
                 self.template_form.backup_max_count,
             ) {
                 Ok(_) => {

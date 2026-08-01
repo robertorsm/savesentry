@@ -43,46 +43,29 @@ impl AppState {
 
             let game_backup_dir = t.expand_backup_directory();
 
-            // Cria perfil ativo baseado no template
-            let mut profile = GameProfile {
+            // Cria perfil ativo baseado no template (runtime-only)
+            let profile = GameProfile {
                 id: 0,
                 name: template_name.clone(),
                 save_path: save_dir.clone(),
                 backup_dir: game_backup_dir,
                 backup_delay_minutes: t.backup_delay_minutes,
+                screenshot_delay_seconds: t.screenshot_delay_seconds,
                 exclude_pattern,
                 save_pattern,
                 is_active: false,
                 template_id: Some(template_id),
                 process_name,
-                created_at: chrono::Local::now().to_rfc3339(),
                 backup_max_count: t.backup_max_count,
                 backup_recursive: false,
             };
 
-            match self.db.insert_game_profile(&profile) {
-                Ok(new_id) => {
-                    profile.id = new_id;
-
-                    // Salva como último perfil usado
-                    let _ = self.db.update_last_profile(
-                        profile.id,
-                        &profile.backup_dir,
-                        profile.backup_delay_minutes,
-                    );
-
-                    #[cfg(debug_assertions)]
-                    println!(
-                        "💾 Perfil salvo e registrado como último usado (ID: {})",
-                        new_id
-                    );
-                }
-                Err(_e) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!("⚠️ Não foi possível salvar perfil: {}", _e);
-                    // Continua mesmo se falhar (perfil temporário)
-                }
-            }
+            // Salva como último template usado
+            let _ = self.db.update_last_template(
+                template_id,
+                &profile.backup_dir,
+                profile.backup_delay_minutes,
+            );
 
             self.active_profile = Some(profile.clone());
             self.current_save_path = save_dir;
@@ -174,28 +157,13 @@ impl AppState {
                 return;
             }
 
-            if profile.id == 0 {
-                match self.db.insert_game_profile(profile) {
-                    Ok(new_id) => {
-                        profile.id = new_id;
-
-                        #[cfg(debug_assertions)]
-                        println!("💾 Perfil salvo no banco com ID: {}", new_id);
-                    }
-                    Err(e) => {
-                        if !silent {
-                            self.set_error_message(format!("Erro ao salvar perfil: {}", e));
-                        }
-                        return;
-                    }
-                }
+            if let Some(template_id) = profile.template_id {
+                let _ = self.db.update_last_template(
+                    template_id,
+                    &profile.backup_dir,
+                    profile.backup_delay_minutes,
+                );
             }
-
-            let _ = self.db.update_last_profile(
-                profile.id,
-                &profile.backup_dir,
-                profile.backup_delay_minutes,
-            );
 
             profile.is_active = true;
 
