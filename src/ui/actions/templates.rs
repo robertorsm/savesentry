@@ -20,7 +20,8 @@ impl AppState {
             self.template_form.original_save_dir = template.save_directory.clone();
             self.template_form.original_backup_dir = template.backup_dir.clone();
             self.template_form.original_backup_delay_minutes = template.backup_delay_minutes;
-            self.template_form.original_screenshot_delay_seconds = template.screenshot_delay_seconds;
+            self.template_form.original_screenshot_delay_seconds =
+                template.screenshot_delay_seconds;
             self.template_form.original_backup_max_count = template.backup_max_count;
             self.template_form.original_process = template.process_name.clone();
             self.template_form.original_pattern = template.save_pattern.clone();

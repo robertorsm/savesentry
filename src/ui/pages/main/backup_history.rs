@@ -25,7 +25,6 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
     }
 
     if !state.backup_history.is_empty() {
-        let mut delete_backup: Option<String> = None;
         let backup_dir_str = state.get_backup_dir();
         let backup_dir = std::path::Path::new(&backup_dir_str);
 
@@ -91,7 +90,9 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                         }
                         ui.separator();
                         if ui.button("🗑 Excluir").clicked() {
-                            delete_backup = Some(backup.filename.clone());
+                            state.delete_target_filename = Some(backup.filename.clone());
+                            state.delete_dialog_open = true;
+                            state.delete_dialog_focus_cancel = false;
                             ui.close();
                         }
                         ui.separator();
@@ -108,10 +109,17 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                         }
                     });
 
+                    let dialog_open = state.restore_dialog_open
+                        || state.delete_dialog_open
+                        || state.rename_dialog_open;
+
                     let frame_clicked = ui.input(|i| {
                         let pointer = &i.pointer;
                         if let Some(pos) = pointer.interact_pos() {
-                            if pointer.primary_clicked() && response.rect.contains(pos) {
+                            if pointer.primary_clicked()
+                                && response.rect.contains(pos)
+                                && !dialog_open
+                            {
                                 return true;
                             }
                         }
@@ -126,6 +134,7 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                         if let Some(pos) = pointer.interact_pos() {
                             if pointer.button_double_clicked(egui::PointerButton::Primary)
                                 && response.rect.contains(pos)
+                                && !dialog_open
                             {
                                 return true;
                             }
@@ -141,10 +150,6 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                     ui.add_space(3.0);
                 }
             });
-
-        if let Some(filename) = delete_backup {
-            state.delete_backup(&filename);
-        }
 
         if state.restore_dialog_open {
             let mut do_restore = false;
@@ -168,6 +173,7 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                 });
 
             egui::Window::new("Confirmar Restauração")
+                .order(egui::Order::Foreground)
                 .collapsible(false)
                 .resizable(false)
                 .movable(false)
@@ -229,6 +235,93 @@ pub fn render_backup_history(ui: &mut egui::Ui, state: &mut AppState) {
                 state.restore_dialog_open = false;
                 state.restore_target_filename = None;
                 state.restore_dialog_focus_cancel = false;
+            }
+        }
+
+        if state.delete_dialog_open {
+            let mut do_delete = false;
+            let mut do_cancel = false;
+
+            let screen_rect = ui
+                .ctx()
+                .input(|i| i.raw.screen_rect)
+                .unwrap_or_else(|| ui.max_rect());
+            egui::Area::new(egui::Id::new("delete_modal_overlay"))
+                .fixed_pos(screen_rect.min)
+                .show(ui.ctx(), |ui| {
+                    ui.set_min_size(screen_rect.size());
+                    let overlay_response = ui.allocate_rect(screen_rect, egui::Sense::click());
+                    ui.painter().rect_filled(
+                        screen_rect,
+                        0.0,
+                        egui::Color32::from_rgba_premultiplied(0, 0, 0, 160),
+                    );
+                    overlay_response
+                });
+
+            egui::Window::new("Confirmar Exclusão")
+                .order(egui::Order::Foreground)
+                .collapsible(false)
+                .resizable(false)
+                .movable(false)
+                .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                .show(ui.ctx(), |ui| {
+                    ui.set_min_width(280.0);
+                    ui.label("Deseja excluir este backup?");
+                    if let Some(ref filename) = state.delete_target_filename {
+                        let label = format_backup_label(filename);
+                        ui.label(egui::RichText::new(label).strong().size(13.0));
+                    }
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let cancel_btn = ui.button("Cancelar");
+                            let ok_btn = ui.button("Ok");
+
+                            if cancel_btn.clicked() {
+                                do_cancel = true;
+                            }
+                            if ok_btn.clicked() {
+                                do_delete = true;
+                            }
+
+                            if state.delete_dialog_focus_cancel {
+                                if cancel_btn.has_focus()
+                                    && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                                {
+                                    do_cancel = true;
+                                }
+                                if ui.input(|i| i.key_pressed(egui::Key::Tab)) {
+                                    state.delete_dialog_focus_cancel = false;
+                                }
+                            } else {
+                                if (ok_btn.has_focus()
+                                    && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                                    || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                                {
+                                    do_delete = true;
+                                }
+                                if ui.input(|i| i.key_pressed(egui::Key::Tab)) {
+                                    state.delete_dialog_focus_cancel = true;
+                                }
+                            }
+                        });
+                    });
+                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                        do_cancel = true;
+                    }
+                });
+
+            if do_delete {
+                if let Some(filename) = state.delete_target_filename.take() {
+                    state.delete_backup(&filename);
+                }
+                state.delete_dialog_open = false;
+                state.delete_dialog_focus_cancel = false;
+            } else if do_cancel {
+                state.delete_dialog_open = false;
+                state.delete_target_filename = None;
+                state.delete_dialog_focus_cancel = false;
             }
         }
 

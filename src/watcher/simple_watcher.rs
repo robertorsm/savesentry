@@ -111,12 +111,7 @@ pub fn start_watching(
                 initial_last_backup_time,
             );
 
-            let last_backup_for_screenshot: std::sync::Arc<std::sync::Mutex<Option<std::path::PathBuf>>> =
-                std::sync::Arc::new(std::sync::Mutex::new(None));
-
-            let screenshot_worker = crate::watcher::file_watcher::ScreenshotWorker::new(
-                std::sync::Arc::clone(&last_backup_for_screenshot)
-            );
+            let screenshot_worker = crate::watcher::file_watcher::ScreenshotWorker::new();
 
             // Cria canal para receber eventos do notify
             let (tx, rx) = mpsc::channel();
@@ -146,13 +141,15 @@ pub fn start_watching(
                 save_path, _profile_name, profile_id
             );
 
+            crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
+
             let debounce_duration = std::time::Duration::from_secs(3);
             let mut deadline: Option<std::time::Instant> = None;
             let mut last_screenshot_time: Option<std::time::Instant> = None;
+            let mut current_stem: Option<String> = None;
             const SCREENSHOT_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(5);
-            let screenshot_delay = std::time::Duration::from_secs(profile.screenshot_delay_seconds as u64);
-
-            crate::watcher::file_watcher::cleanup_pending_screenshot(&backup_dir);
+            let screenshot_delay =
+                std::time::Duration::from_secs(profile.screenshot_delay_seconds as u64);
 
             loop {
                 let should_process = should_monitor_clone.load(Ordering::Relaxed);
@@ -165,14 +162,15 @@ pub fn start_watching(
                             && file_watcher.has_pending()
                             && file_watcher.should_backup()
                         {
+                            crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
+                            let stem = current_stem.take();
                             #[cfg(debug_assertions)]
-                            match file_watcher.create_backup(&save_path) {
+                            match file_watcher.create_backup(&save_path, stem.as_deref()) {
                                 Ok(backup_path) => {
                                     println!(
                                         "✅ Backup criado: {:?} (Perfil: {})",
                                         backup_path, _profile_name
                                     );
-                                    *last_backup_for_screenshot.lock().unwrap() = Some(backup_path);
                                     ctx_clone.request_repaint();
                                 }
                                 Err(e) => {
@@ -180,13 +178,25 @@ pub fn start_watching(
                                         "❌ Erro ao criar backup para {}: {}",
                                         _profile_name, e
                                     );
+                                    if let Some(ref s) = stem {
+                                        crate::watcher::file_watcher::cleanup_screenshots_by_stem(
+                                            &backup_dir,
+                                            s,
+                                        );
+                                    }
                                 }
                             }
 
                             #[cfg(not(debug_assertions))]
-                            if let Ok(backup_path) = file_watcher.create_backup(&save_path) {
-                                *last_backup_for_screenshot.lock().unwrap() = Some(backup_path);
+                            if let Ok(_backup_path) =
+                                file_watcher.create_backup(&save_path, stem.as_deref())
+                            {
                                 ctx_clone.request_repaint();
+                            } else if let Some(ref s) = stem {
+                                crate::watcher::file_watcher::cleanup_screenshots_by_stem(
+                                    &backup_dir,
+                                    s,
+                                );
                             }
                             file_watcher.set_pending(false);
                         }
@@ -239,14 +249,22 @@ pub fn start_watching(
 
                                 if has_relevant_event {
                                     let now = std::time::Instant::now();
-                                    let should_capture = last_screenshot_time
-                                        .is_none_or(|t| now.duration_since(t) >= SCREENSHOT_COOLDOWN);
+                                    let should_capture = last_screenshot_time.is_none_or(|t| {
+                                        now.duration_since(t) >= SCREENSHOT_COOLDOWN
+                                    });
                                     if should_capture {
                                         last_screenshot_time = Some(now);
                                         let _ = std::fs::create_dir_all(&backup_dir);
-                                        crate::watcher::file_watcher::cleanup_pending_screenshot(&backup_dir);
-                                        let pending_path = backup_dir.join("pending_screenshot");
-                                        screenshot_worker.capture(pending_path, screenshot_delay);
+                                        let stem = format!(
+                                            "backup_{}",
+                                            chrono::Local::now().format("%d-%m-%Y_%H-%M-%S")
+                                        );
+                                        current_stem = Some(stem.clone());
+                                        screenshot_worker.capture(
+                                            backup_dir.clone(),
+                                            stem,
+                                            screenshot_delay,
+                                        );
                                     }
                                     // Reseta deadline (sliding debounce)
                                     deadline = Some(std::time::Instant::now() + debounce_duration);
@@ -265,14 +283,15 @@ pub fn start_watching(
                             && file_watcher.has_pending()
                             && file_watcher.should_backup()
                         {
+                            crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
+                            let stem = current_stem.take();
                             #[cfg(debug_assertions)]
-                            match file_watcher.create_backup(&save_path) {
+                            match file_watcher.create_backup(&save_path, stem.as_deref()) {
                                 Ok(backup_path) => {
                                     println!(
                                         "✅ Backup criado (debounce): {:?} (Perfil: {})",
                                         backup_path, _profile_name
                                     );
-                                    *last_backup_for_screenshot.lock().unwrap() = Some(backup_path);
                                     ctx_clone.request_repaint();
                                 }
                                 Err(e) => {
@@ -280,13 +299,25 @@ pub fn start_watching(
                                         "❌ Erro ao criar backup para {}: {}",
                                         _profile_name, e
                                     );
+                                    if let Some(ref s) = stem {
+                                        crate::watcher::file_watcher::cleanup_screenshots_by_stem(
+                                            &backup_dir,
+                                            s,
+                                        );
+                                    }
                                 }
                             }
 
                             #[cfg(not(debug_assertions))]
-                            if let Ok(backup_path) = file_watcher.create_backup(&save_path) {
-                                *last_backup_for_screenshot.lock().unwrap() = Some(backup_path);
+                            if let Ok(_backup_path) =
+                                file_watcher.create_backup(&save_path, stem.as_deref())
+                            {
                                 ctx_clone.request_repaint();
+                            } else if let Some(ref s) = stem {
+                                crate::watcher::file_watcher::cleanup_screenshots_by_stem(
+                                    &backup_dir,
+                                    s,
+                                );
                             }
                             file_watcher.set_pending(false);
                         }
@@ -296,7 +327,6 @@ pub fn start_watching(
                         break;
                     }
                 }
-
             }
 
             #[cfg(debug_assertions)]
