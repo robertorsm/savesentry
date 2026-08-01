@@ -188,6 +188,18 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                     });
                     ui.end_row();
 
+                    ui.label("Screenshot Delay:");
+                    ui.horizontal(|ui| {
+                        ui.add_sized(
+                            [70.0, 20.0],
+                            egui::DragValue::new(&mut state.template_form.screenshot_delay_seconds)
+                                .speed(0.5)
+                                .range(0..=5),
+                        );
+                        ui.label("s");
+                    });
+                    ui.end_row();
+
                     ui.label("Máx. Backups:");
                     ui.horizontal(|ui| {
                         ui.add_sized(
@@ -204,7 +216,7 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                     ui.text_edit_singleline(&mut state.template_form.process);
                     ui.end_row();
 
-                    ui.label("Padrão:");
+                    ui.label("Padrão Savegame:");
                     ui.text_edit_singleline(&mut state.template_form.pattern);
                     ui.end_row();
 
@@ -269,9 +281,10 @@ pub(super) fn render_template_form(ui: &mut egui::Ui, state: &mut AppState) {
                 ui.label("• Windows: %APPDATA%, %LOCALAPPDATA%, %USERPROFILE%, %USERNAME%");
                 ui.label("• Sistema: %PROGRAMFILES%, %PROGRAMFILES(X86)%, %PROGRAMDATA%, %PUBLIC%");
                 ui.label("• Steam: %STEAM_USERDATA%, %STEAMID%");
-                ui.label("• Padrões: *.sav, *.dat, save*.*");
+                ui.label("• Padrões Savegame: *.sav, *.dat, save*.*");
                 ui.label("• Exclusão: *.tmp, *.bak, autosave*");
                 ui.label("• Backup Delay: intervalo mínimo entre backups (em minutos)");
+                ui.label("• Screenshot Delay: segundos de espera antes de capturar a tela");
                 ui.label(
                     "• Máx. Backups: número máximo de backups a manter (mais antigo é excluído)",
                 );

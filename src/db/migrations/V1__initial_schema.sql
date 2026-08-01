@@ -12,38 +12,20 @@ CREATE TABLE IF NOT EXISTS game_templates (
     default_exclude_pattern TEXT,
     backup_dir TEXT NOT NULL,
     backup_delay_minutes INTEGER NOT NULL DEFAULT 5,
+    screenshot_delay_seconds INTEGER NOT NULL DEFAULT 0,
     backup_max_count INTEGER NOT NULL DEFAULT 50,
     version INTEGER NOT NULL DEFAULT 1,
     is_official INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL
 );
 
--- Game profiles (user-created profiles based on templates or custom)
-CREATE TABLE IF NOT EXISTS game_profiles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    template_id INTEGER,
-    name TEXT NOT NULL,
-    save_path TEXT NOT NULL,
-    backup_dir TEXT NOT NULL,
-    backup_delay_minutes INTEGER NOT NULL,
-    exclude_pattern TEXT,
-    save_pattern TEXT,
-    is_active INTEGER NOT NULL DEFAULT 0,
-    process_name TEXT,
-    created_at TEXT NOT NULL,
-    backup_max_count INTEGER NOT NULL DEFAULT 50,
-    backup_recursive INTEGER NOT NULL DEFAULT 0,
-    FOREIGN KEY (template_id) REFERENCES game_templates(id) ON DELETE SET NULL
-);
-
--- App state (last active profile and preferences)
 CREATE TABLE IF NOT EXISTS app_state (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    last_profile_id INTEGER,
+    last_template_id INTEGER,
     last_backup_dir TEXT,
     last_backup_delay_minutes INTEGER DEFAULT 5,
     updated_at TEXT NOT NULL,
-    FOREIGN KEY (last_profile_id) REFERENCES game_profiles(id) ON DELETE SET NULL
+    FOREIGN KEY (last_template_id) REFERENCES game_templates(id) ON DELETE SET NULL
 );
 
 -- Insert initial app state
@@ -59,6 +41,7 @@ INSERT INTO game_templates (
         default_exclude_pattern,
         backup_dir,
         backup_delay_minutes,
+        screenshot_delay_seconds,
         backup_max_count,
         version,
         is_official,
@@ -73,6 +56,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Minecraft',
         5,
+        0,
         50,
         1,
         1,
@@ -87,6 +71,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Terraria',
         5,
+        0,
         50,
         1,
         1,
@@ -101,6 +86,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Stardew Valley',
         5,
+        0,
         50,
         1,
         1,
@@ -115,6 +101,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\The Witcher 3',
         5,
+        0,
         50,
         1,
         1,
@@ -129,6 +116,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Skyrim',
         5,
+        0,
         50,
         1,
         1,
@@ -143,6 +131,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Dark Souls III',
         5,
+        0,
         50,
         1,
         1,
@@ -157,6 +146,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Elden Ring',
         5,
+        0,
         50,
         1,
         1,
@@ -171,6 +161,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Cyberpunk 2077',
         5,
+        0,
         50,
         1,
         1,
@@ -185,6 +176,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Valheim',
         5,
+        0,
         50,
         1,
         1,
@@ -199,6 +191,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Hollow Knight',
         5,
+        0,
         50,
         1,
         1,
@@ -213,6 +206,7 @@ VALUES (
         'steam_autocloud.vdf',
         '%USERPROFILE%\SaveSentry\Octopath Traveler',
         1,
+        0,
         50,
         1,
         1,

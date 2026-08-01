@@ -332,44 +332,54 @@ pub fn capture_screenshot(backup_path: &std::path::Path) -> Result<(), Box<dyn s
     Ok(())
 }
 
-/// Associa um screenshot capturado previamente (pending_screenshot) a um backup criado.
-/// Se não houver screenshot pendente, captura um novo no momento do backup.
-pub fn associate_pending_screenshot(backup_path: &std::path::Path, backup_dir: &std::path::Path) {
+pub fn cleanup_pending_screenshot(backup_dir: &std::path::Path) {
     let pending_png = backup_dir.join("pending_screenshot.png");
     let pending_thumb = backup_dir.join("pending_screenshot.thumb.png");
-
     if pending_png.exists() {
-        if let Some(stem) = backup_path.file_stem() {
-            let target_png = backup_dir.join(stem).with_extension("png");
-            let target_thumb = backup_dir.join(stem).with_extension("thumb.png");
-            let _ = std::fs::rename(&pending_png, &target_png);
-            let _ = std::fs::rename(&pending_thumb, &target_thumb);
-        }
-    } else {
-        let _ = capture_screenshot(backup_path);
+        let _ = std::fs::remove_file(&pending_png);
+    }
+    if pending_thumb.exists() {
+        let _ = std::fs::remove_file(&pending_thumb);
     }
 }
 
 pub struct ScreenshotWorker {
-    sender: std::sync::mpsc::Sender<std::path::PathBuf>,
+    sender: std::sync::mpsc::Sender<(std::path::PathBuf, std::time::Duration)>,
 }
 
 impl ScreenshotWorker {
-    pub fn new() -> Self {
-        let (sender, receiver) = std::sync::mpsc::channel::<std::path::PathBuf>();
+    pub fn new(last_backup: std::sync::Arc<std::sync::Mutex<Option<std::path::PathBuf>>>) -> Self {
+        let (sender, receiver) = std::sync::mpsc::channel::<(std::path::PathBuf, std::time::Duration)>();
         std::thread::Builder::new()
             .name("screenshot_worker".into())
             .stack_size(512 * 1024)
             .spawn(move || {
-                while let Ok(path) = receiver.recv() {
-                    let _ = capture_screenshot(&path);
+                while let Ok((pending_path, delay)) = receiver.recv() {
+                    if delay.as_secs() > 0 {
+                        std::thread::sleep(delay);
+                    }
+                    let _ = capture_screenshot(&pending_path);
+                    let maybe_backup = last_backup.lock().unwrap();
+                    if let Some(ref backup_path) = *maybe_backup {
+                        let backup_dir = backup_path.parent().unwrap_or(std::path::Path::new("."));
+                        let pending_png = backup_dir.join("pending_screenshot.png");
+                        if pending_png.exists() {
+                            if let Some(stem) = backup_path.file_stem() {
+                                let target_png = backup_dir.join(stem).with_extension("png");
+                                let target_thumb = backup_dir.join(stem).with_extension("thumb.png");
+                                let _ = std::fs::rename(&pending_png, &target_png);
+                                let pending_thumb = backup_dir.join("pending_screenshot.thumb.png");
+                                let _ = std::fs::rename(&pending_thumb, &target_thumb);
+                            }
+                        }
+                    }
                 }
             })
             .unwrap();
         Self { sender }
     }
 
-    pub fn capture(&self, path: std::path::PathBuf) {
-        let _ = self.sender.send(path);
+    pub fn capture(&self, path: std::path::PathBuf, delay: std::time::Duration) {
+        let _ = self.sender.send((path, delay));
     }
 }
