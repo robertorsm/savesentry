@@ -112,8 +112,6 @@ pub struct BackupEntry {
     pub filename: String,
     pub created_at: std::time::SystemTime,
     pub size_bytes: u64,
-    #[allow(dead_code)]
-    pub save_name: String,
 }
 
 impl AppState {
@@ -217,14 +215,6 @@ impl AppState {
 
         let mut backups = Vec::new();
 
-        // Calcula save_name uma única vez (não muda durante o loop)
-        let save_name = self
-            .current_save_path
-            .split(&['/', '\\'][..])
-            .next_back()
-            .unwrap_or("save")
-            .to_string();
-
         if let Ok(entries) = std::fs::read_dir(backup_dir) {
             for entry in entries.flatten() {
                 if let Ok(metadata) = entry.metadata() {
@@ -238,7 +228,6 @@ impl AppState {
                                         .modified()
                                         .unwrap_or(std::time::SystemTime::now()),
                                     size_bytes: metadata.len(),
-                                    save_name: save_name.clone(),
                                 });
                             }
                         }

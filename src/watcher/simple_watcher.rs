@@ -27,8 +27,6 @@ mod winapi {
 
 /// Handle para controlar um watcher em background
 pub struct WatcherHandle {
-    #[allow(dead_code)]
-    profile_id: i64,
     _handle: thread::JoinHandle<()>,
     _process_monitor_handle: Option<thread::JoinHandle<()>>,
     last_backup_time: Arc<AtomicU64>,
@@ -37,11 +35,6 @@ pub struct WatcherHandle {
 }
 
 impl WatcherHandle {
-    #[allow(dead_code)]
-    pub fn profile_id(&self) -> i64 {
-        self.profile_id
-    }
-
     pub fn last_backup_time(&self) -> u64 {
         self.last_backup_time.load(Ordering::Relaxed)
     }
@@ -71,7 +64,7 @@ pub fn start_watching(
     ctx: eframe::egui::Context,
     initial_last_backup_time: Option<u64>,
 ) -> Result<WatcherHandle, Box<dyn std::error::Error>> {
-    let profile_id = profile.id;
+    let _profile_id = profile.id;
     let _profile_name = profile.name.clone();
     let _profile_name_for_monitor = _profile_name.clone();
     let save_path = PathBuf::from(&profile.save_path);
@@ -107,7 +100,6 @@ pub fn start_watching(
                 save_pattern,
                 last_backup_time_clone,
                 profile.backup_max_count,
-                profile.backup_recursive,
                 initial_last_backup_time,
             );
 
@@ -121,7 +113,7 @@ pub fn start_watching(
                 Ok(w) => w,
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("Erro ao criar watcher para perfil {}: {}", profile_id, _e);
+                    eprintln!("Erro ao criar watcher para perfil {}: {}", _profile_id, _e);
                     return;
                 }
             };
@@ -130,7 +122,7 @@ pub fn start_watching(
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "Erro ao monitorar diretório {:?} para perfil {}: {}",
-                    save_path, profile_id, _e
+                    save_path, _profile_id, _e
                 );
                 return;
             }
@@ -138,7 +130,7 @@ pub fn start_watching(
             #[cfg(debug_assertions)]
             println!(
                 "Monitorando {:?} para perfil {} (ID: {})",
-                save_path, _profile_name, profile_id
+                save_path, _profile_name, _profile_id
             );
 
             crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
@@ -273,7 +265,7 @@ pub fn start_watching(
                             }
                             Err(_e) => {
                                 #[cfg(debug_assertions)]
-                                eprintln!("Erro no watcher do perfil {}: {}", profile_id, _e);
+                                eprintln!("Erro no watcher do perfil {}: {}", _profile_id, _e);
                             }
                         }
                     }
@@ -332,7 +324,7 @@ pub fn start_watching(
             #[cfg(debug_assertions)]
             println!(
                 "Watcher encerrado para perfil {} (ID: {})",
-                _profile_name, profile_id
+                _profile_name, _profile_id
             );
         })
         .unwrap();
@@ -416,7 +408,6 @@ pub fn start_watching(
     };
 
     Ok(WatcherHandle {
-        profile_id,
         _handle: file_watcher_handle,
         _process_monitor_handle: process_monitor_handle,
         last_backup_time,
