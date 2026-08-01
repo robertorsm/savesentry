@@ -96,6 +96,10 @@ pub struct AppState {
     pub restore_target_filename: Option<String>,
     pub restore_dialog_focus_cancel: bool,
 
+    pub delete_dialog_open: bool,
+    pub delete_target_filename: Option<String>,
+    pub delete_dialog_focus_cancel: bool,
+
     pub screenshot_popup_open: bool,
     pub screenshot_popup_filename: Option<String>,
 
@@ -178,6 +182,9 @@ impl AppState {
             restore_dialog_open: false,
             restore_target_filename: None,
             restore_dialog_focus_cancel: false,
+            delete_dialog_open: false,
+            delete_target_filename: None,
+            delete_dialog_focus_cancel: false,
             screenshot_popup_open: false,
             screenshot_popup_filename: None,
             egui_ctx,
@@ -423,7 +430,8 @@ impl AppState {
     }
 
     fn restore_last_profile(&mut self) {
-        if let Ok((last_template_id, last_backup_dir, last_backup_delay)) = self.db.get_app_state() {
+        if let Ok((last_template_id, last_backup_dir, last_backup_delay)) = self.db.get_app_state()
+        {
             if let Some(dir) = last_backup_dir {
                 self.config.backup_dir = dir;
             }
