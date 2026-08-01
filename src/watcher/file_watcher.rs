@@ -113,6 +113,7 @@ impl FileWatcher {
     pub fn create_backup(
         &mut self,
         _source_path: &std::path::Path,
+        custom_name: Option<&str>,
     ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         if !self.should_backup() {
             return Err("Timeout ainda nao expirou".into());
@@ -123,7 +124,7 @@ impl FileWatcher {
             &self.backup_dir,
             self.exclude_pattern.as_ref(),
             self.save_pattern.as_ref(),
-            None,
+            custom_name,
             self.backup_max_count,
             self.backup_recursive,
         )?;
@@ -299,7 +300,10 @@ fn system_time_to_zip_datetime(time: SystemTime) -> Option<zip::DateTime> {
     zip::DateTime::from_date_and_time(year, month, day, hour, minute, second).ok()
 }
 
-pub fn capture_screenshot(backup_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+pub fn capture_screenshot(
+    backup_dir: &std::path::Path,
+    stem: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     use screenshots::Screen;
 
     let screens = Screen::all()?;
@@ -311,7 +315,7 @@ pub fn capture_screenshot(backup_path: &std::path::Path) -> Result<(), Box<dyn s
     let image_buffer = screen.capture()?;
     let dynamic = image::DynamicImage::ImageRgba8(image_buffer);
 
-    let screenshot_path = backup_path.with_extension("png");
+    let screenshot_path = backup_dir.join(stem).with_extension("png");
     let file = std::fs::File::create(&screenshot_path)?;
     let encoder = image::codecs::png::PngEncoder::new_with_quality(
         file,
@@ -325,61 +329,84 @@ pub fn capture_screenshot(backup_path: &std::path::Path) -> Result<(), Box<dyn s
         image::ColorType::Rgba8,
     )?;
 
-    let thumb_path = backup_path.with_extension("thumb.png");
+    let thumb_path = backup_dir.join(stem).with_extension("thumb.png");
     let thumb = dynamic.resize(320, 180, image::imageops::FilterType::Triangle);
     let _ = thumb.save(&thumb_path);
 
     Ok(())
 }
 
-pub fn cleanup_pending_screenshot(backup_dir: &std::path::Path) {
-    let pending_png = backup_dir.join("pending_screenshot.png");
-    let pending_thumb = backup_dir.join("pending_screenshot.thumb.png");
-    if pending_png.exists() {
-        let _ = std::fs::remove_file(&pending_png);
+pub fn cleanup_screenshots_by_stem(backup_dir: &std::path::Path, stem: &str) {
+    let png = backup_dir.join(stem).with_extension("png");
+    let thumb = backup_dir.join(stem).with_extension("thumb.png");
+    if png.exists() {
+        let _ = std::fs::remove_file(&png);
     }
-    if pending_thumb.exists() {
-        let _ = std::fs::remove_file(&pending_thumb);
+    if thumb.exists() {
+        let _ = std::fs::remove_file(&thumb);
+    }
+}
+
+/// Remove screenshots orfaos (sem ZIP correspondente) do diretorio de backup.
+/// Chamado no startup do watcher para garantir consistencia apos falhas anteriores.
+pub fn cleanup_orphan_screenshots(backup_dir: &std::path::Path) {
+    let Ok(entries) = std::fs::read_dir(backup_dir) else {
+        return;
+    };
+    let mut zips = std::collections::HashSet::new();
+    let mut screenshots = Vec::new();
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            if ext.eq_ignore_ascii_case("zip") {
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    zips.insert(stem.to_string());
+                }
+            } else if ext.eq_ignore_ascii_case("png") {
+                screenshots.push(path);
+            }
+        }
+    }
+    for path in screenshots {
+        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+            // ignora .thumb.png — verifica o stem base
+            let base_stem = stem.strip_suffix(".thumb").unwrap_or(stem);
+            if !zips.contains(base_stem) {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
     }
 }
 
 pub struct ScreenshotWorker {
-    sender: std::sync::mpsc::Sender<(std::path::PathBuf, std::time::Duration)>,
+    sender: std::sync::mpsc::Sender<(std::path::PathBuf, String, std::time::Duration)>,
 }
 
 impl ScreenshotWorker {
-    pub fn new(last_backup: std::sync::Arc<std::sync::Mutex<Option<std::path::PathBuf>>>) -> Self {
-        let (sender, receiver) = std::sync::mpsc::channel::<(std::path::PathBuf, std::time::Duration)>();
+    pub fn new() -> Self {
+        let (sender, receiver) =
+            std::sync::mpsc::channel::<(std::path::PathBuf, String, std::time::Duration)>();
         std::thread::Builder::new()
             .name("screenshot_worker".into())
             .stack_size(512 * 1024)
             .spawn(move || {
-                while let Ok((pending_path, delay)) = receiver.recv() {
+                while let Ok((backup_dir, stem, delay)) = receiver.recv() {
                     if delay.as_secs() > 0 {
                         std::thread::sleep(delay);
                     }
-                    let _ = capture_screenshot(&pending_path);
-                    let maybe_backup = last_backup.lock().unwrap();
-                    if let Some(ref backup_path) = *maybe_backup {
-                        let backup_dir = backup_path.parent().unwrap_or(std::path::Path::new("."));
-                        let pending_png = backup_dir.join("pending_screenshot.png");
-                        if pending_png.exists() {
-                            if let Some(stem) = backup_path.file_stem() {
-                                let target_png = backup_dir.join(stem).with_extension("png");
-                                let target_thumb = backup_dir.join(stem).with_extension("thumb.png");
-                                let _ = std::fs::rename(&pending_png, &target_png);
-                                let pending_thumb = backup_dir.join("pending_screenshot.thumb.png");
-                                let _ = std::fs::rename(&pending_thumb, &target_thumb);
-                            }
-                        }
-                    }
+                    let _ = capture_screenshot(&backup_dir, &stem);
                 }
             })
             .unwrap();
         Self { sender }
     }
 
-    pub fn capture(&self, path: std::path::PathBuf, delay: std::time::Duration) {
-        let _ = self.sender.send((path, delay));
+    pub fn capture(
+        &self,
+        backup_dir: std::path::PathBuf,
+        stem: String,
+        delay: std::time::Duration,
+    ) {
+        let _ = self.sender.send((backup_dir, stem, delay));
     }
 }
