@@ -83,15 +83,17 @@ cargo build
 cargo run
 
 # Quality
-cargo fmt
+cargo fmt -- --check   # Verifica formatacao sem aplicar
+cargo fmt              # Aplica formatacao automatica
 cargo clippy --all-targets --all-features -- -D warnings
+cargo check
 cargo test
 
 # Release (size-optimized)
 cargo build --profile release-windows
 
 # Makefile shortcuts
-make validate    # fmt + clippy + check
+make validate    # fmt --check + clippy + check
 make build-windows   # release build
 ```
 
