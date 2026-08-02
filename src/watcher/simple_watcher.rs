@@ -62,7 +62,7 @@ impl WatcherHandle {
 /// Inicia o monitoramento de um perfil em background
 pub fn start_watching(
     profile: GameProfile,
-    ctx: eframe::egui::Context,
+    ctx: egui::Context,
     initial_last_backup_time: Option<u64>,
 ) -> Result<WatcherHandle, Box<dyn std::error::Error>> {
     let _profile_id = profile.id;
@@ -156,7 +156,7 @@ pub fn start_watching(
                 let recv_result = if let Some(d) = deadline {
                     let now = std::time::Instant::now();
                     if d <= now {
-                        // Deadline expirou: dispara backup apenas se houve modificacao
+                        // Data-limite expirou: dispara ‘backup’ apenas se houve modificação
                         if should_process
                             && file_watcher.has_pending()
                             && file_watcher.should_backup()
@@ -205,8 +205,7 @@ pub fn start_watching(
                     let timeout = d.duration_since(now);
                     rx.recv_timeout(timeout)
                 } else {
-                    rx.recv()
-                        .map_err(|_| std::sync::mpsc::RecvTimeoutError::Disconnected)
+                    rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected)
                 };
 
                 match recv_result {
@@ -265,7 +264,7 @@ pub fn start_watching(
                                             screenshot_delay,
                                         );
                                     }
-                                    // Reseta deadline (sliding debounce)
+                                    // Reset data-limite (sliding debounce)
                                     deadline = Some(std::time::Instant::now() + debounce_duration);
                                     file_watcher.set_pending(true);
                                 }
@@ -276,8 +275,8 @@ pub fn start_watching(
                             }
                         }
                     }
-                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                        // Timeout expirou: dispara backup apenas se houve modificacao pendente
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        // Timeout expirou: dispara ‘backup’ apenas se houve modificação pendente
                         if should_process
                             && file_watcher.has_pending()
                             && file_watcher.should_backup()
@@ -322,7 +321,7 @@ pub fn start_watching(
                         }
                         deadline = None;
                     }
-                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
                         break;
                     }
                 }
@@ -333,8 +332,7 @@ pub fn start_watching(
                 "Watcher encerrado para perfil {} (ID: {})",
                 _profile_name, _profile_id
             );
-        })
-        .unwrap();
+        })?;
 
     let process_monitor_handle = if let Some(proc_name) = process_name {
         let should_monitor_clone = Arc::clone(&should_monitor);
@@ -408,8 +406,7 @@ pub fn start_watching(
 
                         thread::sleep(std::time::Duration::from_secs(2));
                     }
-                })
-                .unwrap(),
+                })?,
         )
     } else {
         None
