@@ -33,7 +33,9 @@ Monitore seus arquivos de save em tempo real e crie backups automáticos em form
 - 🖥️ **Interface Nativa**: UI responsiva e moderna com egui
 - 🌙 **Tema Escuro**: Interface otimizada para longas sessões
 - 🎮 **Monitoramento por Processo**: Só monitora quando o jogo está em execução
+- 🔍 **Auto-detecção de Jogo**: Detecta automaticamente se um jogo configurado já está rodando ao iniciar o app e seleciona o template correspondente
 - 📸 **Captura de Screenshots**: Salva screenshot do momento do backup com thumbnail e visualização full-res
+- ⏳ **Delay de Screenshot**: Configure segundos de espera após a modificação antes de capturar a tela
 - 🔄 **Restauração de Backups**: Restaure saves anteriores com backup de segurança automático
 - ✏️ **Renomear Backups**: Marque backups importantes com nomes personalizados (não são rotacionados)
 - 📊 **Limite de Backups**: Rotação automática com limite configurável (padrão: 50 automáticos)
@@ -107,13 +109,13 @@ make build-windows
 
 ### Gerenciamento de Backups
 
-Na aba principal, o painel de histórico mostra todos os backups do perfil ativo:
+Na aba principal, o painel de histórico mostra todos os backups do perfil ativo. O painel **Save Atual** exibe contadores e informações em tempo real:
 
 - **Screenshot**: Thumbnail da tela no momento do backup — clique para visualização full-res
 - **Restaurar**: Clique com botão direito no backup → "Restaurar" (cria backup de segurança `BeforeRestore_` automaticamente)
 - **Renomear**: Clique com botão direito → "Renomear" para marcar como favorito (não será rotacionado)
 - **Excluir**: Clique com botão direito → "Excluir"
-- **Contadores**: "Backups:" mostra automáticos vs limite; "Fixados:" mostra renomeados
+- **Contadores** (painel Save Atual): "Backups:" mostra automáticos vs limite; "Fixados:" mostra renomeados; "Próximo backup:" mostra contagem regressiva
 
 ### Templates Suportados
 
@@ -161,9 +163,9 @@ O projeto utiliza **Immediate Mode UI** com arquitetura simples e direta:
 └──────────────┬──────────────────────────┘
                ↓
 ┌──────────────────────────────────────────┐
-│  APPLICATION (App)                       │  ← Estado e lógica
+│  APPLICATION (State)                     │  ← Estado centralizado
 │  - State management                      │
-│  - UI + Logic em um só lugar            │
+│  - Orchestration                         │
 └──────────────┬──────────────────────────┘
                ↓
 ┌──────────────────────────────────────────┐
@@ -198,15 +200,13 @@ O projeto utiliza **Immediate Mode UI** com arquitetura simples e direta:
 
 ### Padrões de Projeto
 
-- **Repository Pattern**: Abstração do acesso a dados
-- **Immediate Mode UI**: Renderização e lógica unificadas
-- **Observer Pattern**: File watching com threads
-- **Factory Method**: Criação de perfis e templates
+- **Repository Pattern**: Abstração do acesso a dados via `Database`
+- **Immediate Mode UI**: Renderização com egui, estado mutável inline
+- **Observer Pattern**: File watching via `notify` com `mpsc` channels
 - **Strategy Pattern**: Filtros configuráveis com glob patterns
-- **Thread-based Background**: Watchers em threads separadas
-- **Component Pattern**: UI modular com componentes reutilizáveis
-- **Pure Functions**: Views sem side effects para testabilidade
-- **LRU Cache**: Cache de screenshots com limite de memória GPU
+- **Thread-based Background**: File watcher + process monitor em threads separadas
+- **Component Pattern**: UI modular com componentes reutilizáveis (`pages/`, `components/`)
+- **State Machine**: Ciclo de vida do watcher (ativo/inativo/standby)
 
 
 ## 💻 Desenvolvimento
@@ -219,7 +219,7 @@ SaveSentry/
 │   ├── main.rs                 # Entry point
 │   ├── ui/                     # Presentation layer
 │   │   ├── mod.rs              # Módulo UI
-│   │   ├── app.rs              # Orquestração (~70 linhas)
+│   │   ├── app.rs              # Orquestração (~150 linhas)
 │   │   ├── state.rs            # Estado centralizado
 │   │   ├── actions/            # Business logic
 │   │   │   ├── mod.rs
@@ -253,8 +253,7 @@ SaveSentry/
 │   └── watcher/                # Background processing
 │       ├── mod.rs
 │       ├── file_watcher.rs     # Lógica de backup, ZIP e screenshots
-│       ├── simple_watcher.rs   # Thread-based watching
-│       └── process_monitor.rs  # Monitoramento de processos
+│       └── simple_watcher.rs   # Thread-based file + process watching
 ├── assets/                     # Ícones e imagens
 │   ├── logo.svg                # Logo vetorial
 │   ├── exec_icon.png           # Ícone do executável
@@ -441,7 +440,7 @@ O sistema expande automaticamente variáveis do Windows e paths do Steam:
 | `%STEAM_USERDATA%` | `C:\Program Files (x86)\Steam\userdata` | Detectado em runtime |
 | `%STEAMID%` | `76561198000000000` | Primeira pasta numérica em `userdata/` |
 
-> **Detecção Steam**: O app busca `Steam\userdata` em `%LOCALAPPDATA%`, `%ProgramFiles(x86)%`, `%ProgramFiles%` e `%USERPROFILE%`, usando a primeira subpasta totalmente numérica como SteamID.
+> **Detecção Steam**: Primeiro consulta o Registry do Windows (`HKCU\Software\Valve\Steam\SteamPath` e `ActiveProcess`). Como fallback, busca `Steam\userdata` em `%LOCALAPPDATA%`, `%ProgramFiles(x86)%`, `%ProgramFiles%` e `%USERPROFILE%`, usando a primeira subpasta totalmente numérica como SteamID.
 
 ### Filtros de Exclusão (Glob Patterns)
 
@@ -480,12 +479,9 @@ cargo run
 ### Otimizações
 
 - Cache de templates em memória
-- LRU cache de screenshots (máx. 1 full-res + 2 thumbs na GPU)
-- Reutilização de `sysinfo::System` (evita recriação a cada poll)
+- HashMap de screenshots na GPU (cache com limite de 1 textura)
 - SQLite cache reduzido para 512KB
 - Threads de watcher com stack de 512KB
-- Stream lazy para processamento de eventos
-- HashMap para lookup O(1) de watchers
 - Zero-cost abstractions do Rust
 - Iteradores em vez de loops
 
@@ -516,7 +512,7 @@ icacls SaveSentry.exe
 3. Arquivo não foi modificado
 4. Filtro de exclusão está bloqueando
 5. Processo do jogo não está em execução (se configurado)
-6. Limite de backups foi atingido e rotação falhou
+6. Diretório de backup não existe ou sem permissão de escrita
 
 **Verificação**:
 ```powershell

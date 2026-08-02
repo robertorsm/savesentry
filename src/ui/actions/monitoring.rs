@@ -57,7 +57,6 @@ impl AppState {
                 template_id: Some(template_id),
                 process_name,
                 backup_max_count: t.backup_max_count,
-                backup_recursive: false,
             };
 
             // Salva como último template usado
@@ -406,7 +405,6 @@ impl AppState {
             save_pattern.as_ref(),
             Some(&safety_name),
             50,
-            false,
         )?;
 
         self.set_success_message(format!("Safety backup '{}' criado", safety_name));

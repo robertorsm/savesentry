@@ -13,5 +13,4 @@ pub struct GameProfile {
     pub is_active: bool,
     pub process_name: Option<String>,
     pub backup_max_count: u32,
-    pub backup_recursive: bool,
 }

@@ -16,32 +16,26 @@ mod winapi {
 
     extern "system" {
         pub fn OpenProcess(
-            dwDesiredAccess: u32,
-            bInheritHandle: i32,
-            dwProcessId: u32,
+            dw_desired_access: u32,
+            b_inherit_handle: i32,
+            dw_process_id: u32,
         ) -> *mut c_void;
-        pub fn WaitForSingleObject(hHandle: *mut c_void, dwMilliseconds: u32) -> u32;
-        pub fn CloseHandle(hObject: *mut c_void) -> i32;
+        pub fn WaitForSingleObject(h_handle: *mut c_void, dw_milliseconds: u32) -> u32;
+        pub fn CloseHandle(h_object: *mut c_void) -> i32;
     }
 }
 
 /// Handle para controlar um watcher em background
 pub struct WatcherHandle {
-    #[allow(dead_code)]
-    profile_id: i64,
     _handle: thread::JoinHandle<()>,
     _process_monitor_handle: Option<thread::JoinHandle<()>>,
     last_backup_time: Arc<AtomicU64>,
     pub recent_save: Arc<Mutex<Option<(String, SystemTime)>>>,
     pub process_running: Arc<AtomicBool>,
+    pub new_screenshot_ready: Arc<AtomicBool>,
 }
 
 impl WatcherHandle {
-    #[allow(dead_code)]
-    pub fn profile_id(&self) -> i64 {
-        self.profile_id
-    }
-
     pub fn last_backup_time(&self) -> u64 {
         self.last_backup_time.load(Ordering::Relaxed)
     }
@@ -68,10 +62,10 @@ impl WatcherHandle {
 /// Inicia o monitoramento de um perfil em background
 pub fn start_watching(
     profile: GameProfile,
-    ctx: eframe::egui::Context,
+    ctx: egui::Context,
     initial_last_backup_time: Option<u64>,
 ) -> Result<WatcherHandle, Box<dyn std::error::Error>> {
-    let profile_id = profile.id;
+    let _profile_id = profile.id;
     let _profile_name = profile.name.clone();
     let _profile_name_for_monitor = _profile_name.clone();
     let save_path = PathBuf::from(&profile.save_path);
@@ -94,6 +88,9 @@ pub fn start_watching(
     let process_running = Arc::new(AtomicBool::new(true));
     let process_running_clone = Arc::clone(&process_running);
 
+    let new_screenshot_ready = Arc::new(AtomicBool::new(false));
+    let new_screenshot_ready_for_worker = Arc::clone(&new_screenshot_ready);
+
     let file_watcher_handle = thread::Builder::new()
         .name("file_watcher".into())
         .stack_size(512 * 1024)
@@ -107,11 +104,13 @@ pub fn start_watching(
                 save_pattern,
                 last_backup_time_clone,
                 profile.backup_max_count,
-                profile.backup_recursive,
                 initial_last_backup_time,
             );
 
-            let screenshot_worker = crate::watcher::file_watcher::ScreenshotWorker::new();
+            let screenshot_worker = crate::watcher::file_watcher::ScreenshotWorker::new(
+                new_screenshot_ready_for_worker,
+                ctx_clone.clone(),
+            );
 
             // Cria canal para receber eventos do notify
             let (tx, rx) = mpsc::channel();
@@ -121,7 +120,7 @@ pub fn start_watching(
                 Ok(w) => w,
                 Err(_e) => {
                     #[cfg(debug_assertions)]
-                    eprintln!("Erro ao criar watcher para perfil {}: {}", profile_id, _e);
+                    eprintln!("Erro ao criar watcher para perfil {}: {}", _profile_id, _e);
                     return;
                 }
             };
@@ -130,7 +129,7 @@ pub fn start_watching(
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "Erro ao monitorar diretório {:?} para perfil {}: {}",
-                    save_path, profile_id, _e
+                    save_path, _profile_id, _e
                 );
                 return;
             }
@@ -138,7 +137,7 @@ pub fn start_watching(
             #[cfg(debug_assertions)]
             println!(
                 "Monitorando {:?} para perfil {} (ID: {})",
-                save_path, _profile_name, profile_id
+                save_path, _profile_name, _profile_id
             );
 
             crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
@@ -157,12 +156,11 @@ pub fn start_watching(
                 let recv_result = if let Some(d) = deadline {
                     let now = std::time::Instant::now();
                     if d <= now {
-                        // Deadline expirou: dispara backup apenas se houve modificação
+                        // Data-limite expirou: dispara ‘backup’ apenas se houve modificação
                         if should_process
                             && file_watcher.has_pending()
                             && file_watcher.should_backup()
                         {
-                            crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
                             let stem = current_stem.take();
                             #[cfg(debug_assertions)]
                             match file_watcher.create_backup(&save_path, stem.as_deref()) {
@@ -198,6 +196,7 @@ pub fn start_watching(
                                     s,
                                 );
                             }
+                            crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
                             file_watcher.set_pending(false);
                         }
                         deadline = None;
@@ -206,8 +205,7 @@ pub fn start_watching(
                     let timeout = d.duration_since(now);
                     rx.recv_timeout(timeout)
                 } else {
-                    rx.recv()
-                        .map_err(|_| std::sync::mpsc::RecvTimeoutError::Disconnected)
+                    rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected)
                 };
 
                 match recv_result {
@@ -266,24 +264,23 @@ pub fn start_watching(
                                             screenshot_delay,
                                         );
                                     }
-                                    // Reseta deadline (sliding debounce)
+                                    // Reset data-limite (sliding debounce)
                                     deadline = Some(std::time::Instant::now() + debounce_duration);
                                     file_watcher.set_pending(true);
                                 }
                             }
                             Err(_e) => {
                                 #[cfg(debug_assertions)]
-                                eprintln!("Erro no watcher do perfil {}: {}", profile_id, _e);
+                                eprintln!("Erro no watcher do perfil {}: {}", _profile_id, _e);
                             }
                         }
                     }
-                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                        // Timeout expirou: dispara backup apenas se houve modificação pendente
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        // Timeout expirou: dispara ‘backup’ apenas se houve modificação pendente
                         if should_process
                             && file_watcher.has_pending()
                             && file_watcher.should_backup()
                         {
-                            crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
                             let stem = current_stem.take();
                             #[cfg(debug_assertions)]
                             match file_watcher.create_backup(&save_path, stem.as_deref()) {
@@ -319,11 +316,12 @@ pub fn start_watching(
                                     s,
                                 );
                             }
+                            crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
                             file_watcher.set_pending(false);
                         }
                         deadline = None;
                     }
-                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
                         break;
                     }
                 }
@@ -332,10 +330,9 @@ pub fn start_watching(
             #[cfg(debug_assertions)]
             println!(
                 "Watcher encerrado para perfil {} (ID: {})",
-                _profile_name, profile_id
+                _profile_name, _profile_id
             );
-        })
-        .unwrap();
+        })?;
 
     let process_monitor_handle = if let Some(proc_name) = process_name {
         let should_monitor_clone = Arc::clone(&should_monitor);
@@ -375,6 +372,7 @@ pub fn start_watching(
                     );
 
                             should_monitor_clone.store(true, Ordering::Relaxed);
+                            ctx.request_repaint();
 
                             #[cfg(windows)]
                             unsafe {
@@ -408,19 +406,18 @@ pub fn start_watching(
 
                         thread::sleep(std::time::Duration::from_secs(2));
                     }
-                })
-                .unwrap(),
+                })?,
         )
     } else {
         None
     };
 
     Ok(WatcherHandle {
-        profile_id,
         _handle: file_watcher_handle,
         _process_monitor_handle: process_monitor_handle,
         last_backup_time,
         recent_save,
         process_running,
+        new_screenshot_ready,
     })
 }

@@ -3,14 +3,13 @@ use image::ImageEncoder;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 /// Gerenciador de estado e lógica de backup para um perfil
 #[derive(Debug)]
 pub struct FileWatcher {
-    #[allow(dead_code)]
     save_path: PathBuf,
     backup_dir: PathBuf,
     backup_delay_minutes: u32,
@@ -19,7 +18,6 @@ pub struct FileWatcher {
     save_pattern: Option<glob::Pattern>,
     last_backup_time: Arc<AtomicU64>,
     backup_max_count: u32,
-    backup_recursive: bool,
     pending: bool,
 }
 
@@ -33,7 +31,6 @@ impl FileWatcher {
         save_pattern_str: Option<String>,
         last_backup_time: Arc<AtomicU64>,
         backup_max_count: u32,
-        backup_recursive: bool,
         initial_last_backup_time: Option<u64>,
     ) -> Self {
         let exclude_pattern = exclude_pattern_str.and_then(|s| glob::Pattern::new(&s).ok());
@@ -51,7 +48,6 @@ impl FileWatcher {
             save_pattern,
             last_backup_time,
             backup_max_count,
-            backup_recursive,
             pending: false,
         }
     }
@@ -126,7 +122,6 @@ impl FileWatcher {
             self.save_pattern.as_ref(),
             custom_name,
             self.backup_max_count,
-            self.backup_recursive,
         )?;
 
         let now = SystemTime::now();
@@ -149,7 +144,6 @@ impl FileWatcher {
         save_pattern: Option<&glob::Pattern>,
         custom_name: Option<&str>,
         backup_max_count: u32,
-        backup_recursive: bool,
     ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         fs::create_dir_all(backup_dir)?;
 
@@ -171,48 +165,43 @@ impl FileWatcher {
         };
 
         let mut files_added = 0;
-        let mut queue: Vec<std::path::PathBuf> = vec![save_path.to_path_buf()];
-        let _base_depth = save_path.components().count();
 
-        while let Some(current_dir) = queue.pop() {
-            if let Ok(entries) = fs::read_dir(&current_dir) {
-                for entry in entries.flatten() {
-                    if let Ok(metadata) = entry.metadata() {
-                        if metadata.is_file() {
-                            if let Some(name) = entry.file_name().to_str() {
-                                if let Some(pattern) = save_pattern {
-                                    if !pattern.matches_with(name, match_opts) {
-                                        continue;
-                                    }
-                                }
-                                if let Some(pattern) = exclude_pattern {
-                                    if pattern.matches_with(name, match_opts) {
-                                        continue;
-                                    }
-                                }
-
-                                let mut options = zip::write::FileOptions::default()
-                                    .compression_method(zip::CompressionMethod::Deflated);
-
-                                if let Ok(modified) = metadata.modified() {
-                                    if let Some(zip_time) = system_time_to_zip_datetime(modified) {
-                                        options = options.last_modified_time(zip_time);
-                                    }
-                                }
-
-                                let entry_path = entry.path();
-                                let relative_path =
-                                    entry_path.strip_prefix(save_path).unwrap_or(&entry_path);
-                                let zip_name = relative_path.to_string_lossy().replace('\\', "/");
-
-                                zip.start_file(&zip_name, options)?;
-                                let mut source = fs::File::open(entry.path())?;
-                                io::copy(&mut source, &mut zip)?;
-                                files_added += 1;
+        if let Ok(entries) = fs::read_dir(save_path) {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    if !metadata.is_file() {
+                        continue;
+                    }
+                    if let Some(name) = entry.file_name().to_str() {
+                        if let Some(pattern) = save_pattern {
+                            if !pattern.matches_with(name, match_opts) {
+                                continue;
                             }
-                        } else if metadata.is_dir() && backup_recursive {
-                            queue.push(entry.path());
                         }
+                        if let Some(pattern) = exclude_pattern {
+                            if pattern.matches_with(name, match_opts) {
+                                continue;
+                            }
+                        }
+
+                        let mut options = zip::write::FileOptions::default()
+                            .compression_method(zip::CompressionMethod::Deflated);
+
+                        if let Ok(modified) = metadata.modified() {
+                            if let Some(zip_time) = system_time_to_zip_datetime(modified) {
+                                options = options.last_modified_time(zip_time);
+                            }
+                        }
+
+                        let entry_path = entry.path();
+                        let relative_path =
+                            entry_path.strip_prefix(save_path).unwrap_or(&entry_path);
+                        let zip_name = relative_path.to_string_lossy().replace('\\', "/");
+
+                        zip.start_file(&zip_name, options)?;
+                        let mut source = fs::File::open(entry.path())?;
+                        io::copy(&mut source, &mut zip)?;
+                        files_added += 1;
                     }
                 }
             }
@@ -225,9 +214,7 @@ impl FileWatcher {
             return Err("Nenhum arquivo encontrado para backup".into());
         }
 
-        // Só rotaciona backups automáticos (sem nome customizado)
-        // Safety backups e backups manuais não contam para o limite
-        if custom_name.is_none() {
+        if Self::is_auto_backup_name(&backup_name) {
             Self::rotate_backups_with_count(backup_dir, backup_max_count as usize)?;
         }
 
@@ -316,6 +303,7 @@ pub fn capture_screenshot(
     let dynamic = image::DynamicImage::ImageRgba8(image_buffer);
 
     let screenshot_path = backup_dir.join(stem).with_extension("png");
+
     let file = std::fs::File::create(&screenshot_path)?;
     let encoder = image::codecs::png::PngEncoder::new_with_quality(
         file,
@@ -383,7 +371,7 @@ pub struct ScreenshotWorker {
 }
 
 impl ScreenshotWorker {
-    pub fn new() -> Self {
+    pub fn new(new_screenshot_ready: Arc<AtomicBool>, egui_ctx: eframe::egui::Context) -> Self {
         let (sender, receiver) =
             std::sync::mpsc::channel::<(std::path::PathBuf, String, std::time::Duration)>();
         std::thread::Builder::new()
@@ -395,6 +383,8 @@ impl ScreenshotWorker {
                         std::thread::sleep(delay);
                     }
                     let _ = capture_screenshot(&backup_dir, &stem);
+                    new_screenshot_ready.store(true, Ordering::Relaxed);
+                    egui_ctx.request_repaint();
                 }
             })
             .unwrap();
