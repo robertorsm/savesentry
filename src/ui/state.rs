@@ -84,7 +84,6 @@ pub struct AppState {
     // Rastreia o último backup já refletido na UI para atualização automática
     last_seen_backup_time: u64,
 
-    pub last_ui_update: std::time::Instant,
     pub selected_backup_filename: Option<String>,
     pub screenshot_textures: std::collections::HashMap<String, eframe::egui::TextureHandle>,
 
@@ -171,7 +170,6 @@ impl AppState {
             restart_monitoring_after: None,
             last_backup_time_before_restore: None,
             last_seen_backup_time: 0,
-            last_ui_update: std::time::Instant::now(),
             selected_backup_filename: None,
             screenshot_textures: std::collections::HashMap::new(),
             rename_dialog_open: false,
@@ -364,6 +362,28 @@ impl AppState {
             }
         }
         false
+    }
+
+    /// Verifica se o worker de screenshot concluiu uma captura e notifica a UI
+    /// para recarregar o screenshot do backup mais recente imediatamente.
+    /// Retorna true se o screenshot foi atualizado
+    pub fn check_screenshot_ready(&mut self) -> bool {
+        let Some(ref watcher) = self.active_watcher else {
+            return false;
+        };
+        if !watcher
+            .new_screenshot_ready
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
+        {
+            return false;
+        }
+
+        // Nova captura concluída: limpa cache de textura para forçar reload
+        self.screenshot_textures.clear();
+        if let Some(latest) = self.backup_history.first() {
+            self.selected_backup_filename = Some(latest.filename.clone());
+        }
+        true
     }
 
     /// Limpa mensagens de erro/sucesso

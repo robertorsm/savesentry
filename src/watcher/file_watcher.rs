@@ -3,7 +3,7 @@ use image::ImageEncoder;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -371,7 +371,7 @@ pub struct ScreenshotWorker {
 }
 
 impl ScreenshotWorker {
-    pub fn new() -> Self {
+    pub fn new(new_screenshot_ready: Arc<AtomicBool>, egui_ctx: eframe::egui::Context) -> Self {
         let (sender, receiver) =
             std::sync::mpsc::channel::<(std::path::PathBuf, String, std::time::Duration)>();
         std::thread::Builder::new()
@@ -383,6 +383,8 @@ impl ScreenshotWorker {
                         std::thread::sleep(delay);
                     }
                     let _ = capture_screenshot(&backup_dir, &stem);
+                    new_screenshot_ready.store(true, Ordering::Relaxed);
+                    egui_ctx.request_repaint();
                 }
             })
             .unwrap();

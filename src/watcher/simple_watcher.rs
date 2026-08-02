@@ -16,12 +16,12 @@ mod winapi {
 
     extern "system" {
         pub fn OpenProcess(
-            dwDesiredAccess: u32,
-            bInheritHandle: i32,
-            dwProcessId: u32,
+            dw_desired_access: u32,
+            b_inherit_handle: i32,
+            dw_process_id: u32,
         ) -> *mut c_void;
-        pub fn WaitForSingleObject(hHandle: *mut c_void, dwMilliseconds: u32) -> u32;
-        pub fn CloseHandle(hObject: *mut c_void) -> i32;
+        pub fn WaitForSingleObject(h_handle: *mut c_void, dw_milliseconds: u32) -> u32;
+        pub fn CloseHandle(h_object: *mut c_void) -> i32;
     }
 }
 
@@ -32,6 +32,7 @@ pub struct WatcherHandle {
     last_backup_time: Arc<AtomicU64>,
     pub recent_save: Arc<Mutex<Option<(String, SystemTime)>>>,
     pub process_running: Arc<AtomicBool>,
+    pub new_screenshot_ready: Arc<AtomicBool>,
 }
 
 impl WatcherHandle {
@@ -87,6 +88,9 @@ pub fn start_watching(
     let process_running = Arc::new(AtomicBool::new(true));
     let process_running_clone = Arc::clone(&process_running);
 
+    let new_screenshot_ready = Arc::new(AtomicBool::new(false));
+    let new_screenshot_ready_for_worker = Arc::clone(&new_screenshot_ready);
+
     let file_watcher_handle = thread::Builder::new()
         .name("file_watcher".into())
         .stack_size(512 * 1024)
@@ -103,7 +107,10 @@ pub fn start_watching(
                 initial_last_backup_time,
             );
 
-            let screenshot_worker = crate::watcher::file_watcher::ScreenshotWorker::new();
+            let screenshot_worker = crate::watcher::file_watcher::ScreenshotWorker::new(
+                new_screenshot_ready_for_worker,
+                ctx_clone.clone(),
+            );
 
             // Cria canal para receber eventos do notify
             let (tx, rx) = mpsc::channel();
@@ -367,6 +374,7 @@ pub fn start_watching(
                     );
 
                             should_monitor_clone.store(true, Ordering::Relaxed);
+                            ctx.request_repaint();
 
                             #[cfg(windows)]
                             unsafe {
@@ -413,5 +421,6 @@ pub fn start_watching(
         last_backup_time,
         recent_save,
         process_running,
+        new_screenshot_ready,
     })
 }

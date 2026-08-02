@@ -29,24 +29,15 @@ impl eframe::App for App {
     fn logic(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         let now = std::time::Instant::now();
 
-        if self.state.last_ui_update.elapsed() >= std::time::Duration::from_millis(1000) {
-            self.state.last_ui_update = now;
-            self.state.update_save_info();
-
-            if self.state.check_backup_updates() {
-                ctx.request_repaint();
-            }
-
-            if self.state.active_watcher.is_none() {
-                if let Some(ref profile) = self.state.active_profile {
-                    if let Some(ref proc_name) = profile.process_name {
-                        if crate::ui::actions::monitoring::is_process_running(proc_name) {
-                            self.state.restart_monitoring();
-                        }
-                    }
-                }
-            }
+        if self.state.check_backup_updates() {
+            ctx.request_repaint();
         }
+
+        if self.state.check_screenshot_ready() {
+            ctx.request_repaint();
+        }
+
+        self.state.update_save_info();
 
         if let Some(instant) = self.state.restart_monitoring_after {
             if instant <= now {
@@ -74,18 +65,34 @@ impl eframe::App for App {
             }
         }
 
+        if self.state.active_watcher.is_none() {
+            if let Some(ref profile) = self.state.active_profile {
+                if let Some(ref proc_name) = profile.process_name {
+                    if crate::ui::actions::monitoring::is_process_running(proc_name) {
+                        self.state.restart_monitoring();
+                    }
+                }
+            }
+        }
+
         if self.state.active_watcher.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_secs(1));
-        } else if self.state.active_profile.is_some()
-            && self
-                .state
-                .active_profile
-                .as_ref()
-                .unwrap()
-                .process_name
-                .is_some()
-        {
-            ctx.request_repaint_after(std::time::Duration::from_secs(2));
+        }
+
+        let next_deadline = [
+            self.state.restart_monitoring_after,
+            self.state.message_expires_at,
+        ]
+        .into_iter()
+        .flatten()
+        .min();
+        if let Some(deadline) = next_deadline {
+            let remaining = deadline.saturating_duration_since(now);
+            if remaining.is_zero() {
+                ctx.request_repaint();
+            } else {
+                ctx.request_repaint_after(remaining);
+            }
         }
     }
 
