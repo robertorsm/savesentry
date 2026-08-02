@@ -56,8 +56,8 @@ impl AppState {
                 is_active: false,
                 template_id: Some(template_id),
                 process_name,
-        backup_max_count: t.backup_max_count,
-    };
+                backup_max_count: t.backup_max_count,
+            };
 
             // Salva como último template usado
             let _ = self.db.update_last_template(

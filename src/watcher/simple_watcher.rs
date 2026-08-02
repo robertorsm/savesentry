@@ -149,12 +149,11 @@ pub fn start_watching(
                 let recv_result = if let Some(d) = deadline {
                     let now = std::time::Instant::now();
                     if d <= now {
-                        // Deadline expirou: dispara backup apenas se houve modificação
+                        // Deadline expirou: dispara backup apenas se houve modificacao
                         if should_process
                             && file_watcher.has_pending()
                             && file_watcher.should_backup()
                         {
-                            crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
                             let stem = current_stem.take();
                             #[cfg(debug_assertions)]
                             match file_watcher.create_backup(&save_path, stem.as_deref()) {
@@ -190,6 +189,7 @@ pub fn start_watching(
                                     s,
                                 );
                             }
+                            crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
                             file_watcher.set_pending(false);
                         }
                         deadline = None;
@@ -270,12 +270,11 @@ pub fn start_watching(
                         }
                     }
                     Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                        // Timeout expirou: dispara backup apenas se houve modificação pendente
+                        // Timeout expirou: dispara backup apenas se houve modificacao pendente
                         if should_process
                             && file_watcher.has_pending()
                             && file_watcher.should_backup()
                         {
-                            crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
                             let stem = current_stem.take();
                             #[cfg(debug_assertions)]
                             match file_watcher.create_backup(&save_path, stem.as_deref()) {
@@ -311,6 +310,7 @@ pub fn start_watching(
                                     s,
                                 );
                             }
+                            crate::watcher::file_watcher::cleanup_orphan_screenshots(&backup_dir);
                             file_watcher.set_pending(false);
                         }
                         deadline = None;

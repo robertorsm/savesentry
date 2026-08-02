@@ -214,9 +214,7 @@ impl FileWatcher {
             return Err("Nenhum arquivo encontrado para backup".into());
         }
 
-        // Só rotaciona backups automáticos (sem nome customizado)
-        // Safety backups e backups manuais não contam para o limite
-        if custom_name.is_none() {
+        if Self::is_auto_backup_name(&backup_name) {
             Self::rotate_backups_with_count(backup_dir, backup_max_count as usize)?;
         }
 
@@ -305,6 +303,7 @@ pub fn capture_screenshot(
     let dynamic = image::DynamicImage::ImageRgba8(image_buffer);
 
     let screenshot_path = backup_dir.join(stem).with_extension("png");
+
     let file = std::fs::File::create(&screenshot_path)?;
     let encoder = image::codecs::png::PngEncoder::new_with_quality(
         file,
